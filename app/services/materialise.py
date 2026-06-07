@@ -1,0 +1,475 @@
+from app.extensions import db
+from app.models import (
+    ActionItem,
+    DocumentAnalysis,
+    DocumentChunk,
+    Insight,
+    InsightEvidence,
+    ProcessingLog,
+    RiskFlag,
+    SourceFile,
+    utcnow,
+)
+
+
+def _log(source_file_id, stage, status, message=None):
+    entry = ProcessingLog(
+        source_file_id=source_file_id,
+        stage=stage,
+        status=status,
+        message=message,
+        started_at=utcnow(),
+        finished_at=utcnow(),
+    )
+    db.session.add(entry)
+
+
+def _first_chunk(source_file_id):
+    return (
+        DocumentChunk.query
+        .filter_by(source_file_id=source_file_id)
+        .order_by(DocumentChunk.chunk_index.asc())
+        .first()
+    )
+
+
+def _clean(value, fallback=""):
+    if value is None:
+        return fallback
+
+    if isinstance(value, str):
+        return value.strip()
+
+    return str(value).strip()
+
+
+def _truncate(value, limit):
+    value = _clean(value)
+    if len(value) <= limit:
+        return value
+    return value[: limit - 3].rstrip() + "..."
+
+
+def _normalise_severity(value):
+    value = _clean(value, "Amber").title()
+
+    if value in ["Red", "Amber", "Green", "Blue"]:
+        return value
+
+    if value in ["High", "Critical", "Severe"]:
+        return "Red"
+
+    if value in ["Medium", "Moderate"]:
+        return "Amber"
+
+    if value in ["Low", "None"]:
+        return "Green"
+
+    return "Amber"
+
+
+def _normalise_priority(value):
+    value = _clean(value, "Medium").title()
+
+    if value in ["High", "Medium", "Low"]:
+        return value
+
+    return "Medium"
+
+
+def _normalise_confidence(value):
+    value = _clean(value, "Medium").title()
+
+    if value in ["High", "Medium", "Low"]:
+        return value
+
+    return "Medium"
+
+
+def _action_exists(source_file_id, title):
+    return ActionItem.query.filter_by(
+        source_file_id=source_file_id,
+        title=title,
+        created_by_ai=True,
+    ).first()
+
+
+def _risk_exists(source_file_id, title):
+    return RiskFlag.query.filter_by(
+        source_file_id=source_file_id,
+        title=title,
+    ).first()
+
+
+def _insight_exists(title, source_file_id):
+    existing = Insight.query.filter_by(title=title).first()
+
+    if not existing:
+        return None
+
+    evidence = InsightEvidence.query.filter_by(
+        insight_id=existing.id,
+        source_file_id=source_file_id,
+    ).first()
+
+    if evidence:
+        return existing
+
+    return None
+
+
+def _create_evidence(insight, source_file, snippet=None):
+    first_chunk = _first_chunk(source_file.id)
+
+    existing = InsightEvidence.query.filter_by(
+        insight_id=insight.id,
+        source_file_id=source_file.id,
+        document_chunk_id=first_chunk.id if first_chunk else None,
+    ).first()
+
+    if existing:
+        return existing
+
+    evidence = InsightEvidence(
+        insight_id=insight.id,
+        source_file_id=source_file.id,
+        document_chunk_id=first_chunk.id if first_chunk else None,
+        evidence_snippet=_truncate(snippet or "", 2000),
+    )
+
+    db.session.add(evidence)
+    return evidence
+
+
+def create_actions_from_analysis(source_file, analysis):
+    created = 0
+    skipped = 0
+
+    actions = analysis.actions_json or []
+
+    for item in actions:
+        title = _truncate(item.get("title") or item.get("action") or "Untitled action", 300)
+
+        if not title or title == "Untitled action":
+            skipped += 1
+            continue
+
+        if _action_exists(source_file.id, title):
+            skipped += 1
+            continue
+
+        action = ActionItem(
+            title=title,
+            description=_clean(item.get("description")),
+            owner=_truncate(item.get("owner"), 255) or None,
+            priority=_normalise_priority(item.get("priority")),
+            status="open",
+            business_area=source_file.business_area,
+            source_file_id=source_file.id,
+            document_chunk_id=_first_chunk(source_file.id).id if _first_chunk(source_file.id) else None,
+            source_snippet=_truncate(item.get("source_snippet"), 2000),
+            created_by_ai=True,
+            confidence="Medium",
+        )
+
+        db.session.add(action)
+        created += 1
+
+    return created, skipped
+
+
+def create_risks_and_insights_from_analysis(source_file, analysis):
+    created_risks = 0
+    skipped_risks = 0
+    created_insights = 0
+    skipped_insights = 0
+
+    risks = analysis.risks_json or []
+
+    for item in risks:
+        title = _truncate(item.get("title") or "Untitled risk", 300)
+
+        if not title or title == "Untitled risk":
+            skipped_risks += 1
+            skipped_insights += 1
+            continue
+
+        severity = _normalise_severity(item.get("severity"))
+        confidence = _normalise_confidence(item.get("confidence"))
+        business_area = _clean(item.get("business_area")) or source_file.business_area
+
+        existing_risk = _risk_exists(source_file.id, title)
+
+        if existing_risk:
+            skipped_risks += 1
+        else:
+            risk = RiskFlag(
+                title=title,
+                risk_type="AI Extracted Risk",
+                business_area=business_area,
+                severity=severity,
+                confidence=confidence,
+                likelihood=None,
+                impact=severity,
+                valuation_impact="Unknown",
+                buyer_relevance=_clean(item.get("buyer_relevance")),
+                summary=_clean(item.get("why_it_matters")) or _clean(item.get("summary")),
+                mitigation=None,
+                owner=None,
+                status="open",
+                source_file_id=source_file.id,
+            )
+
+            db.session.add(risk)
+            created_risks += 1
+
+        insight_title = title
+
+        if _insight_exists(insight_title, source_file.id):
+            skipped_insights += 1
+        else:
+            insight = Insight(
+                title=insight_title,
+                insight_type="Risk",
+                business_area=business_area,
+                category="AI Extracted Risk",
+                severity=severity,
+                confidence=confidence,
+                summary=_clean(item.get("why_it_matters")) or _clean(item.get("summary")),
+                why_it_matters=_clean(item.get("why_it_matters")),
+                buyer_relevance=_clean(item.get("buyer_relevance")),
+                suggested_action=None,
+                status="open",
+                owner=None,
+                first_seen_at=utcnow(),
+                last_seen_at=utcnow(),
+                trend="New",
+            )
+
+            db.session.add(insight)
+            db.session.flush()
+
+            _create_evidence(
+                insight,
+                source_file,
+                snippet=item.get("source_snippet") or item.get("why_it_matters"),
+            )
+
+            created_insights += 1
+
+    return created_risks, skipped_risks, created_insights, skipped_insights
+
+
+def create_opportunity_insights_from_analysis(source_file, analysis):
+    created = 0
+    skipped = 0
+
+    opportunities = analysis.opportunities_json or []
+
+    for item in opportunities:
+        title = _truncate(item.get("title") or "Untitled opportunity", 300)
+
+        if not title or title == "Untitled opportunity":
+            skipped += 1
+            continue
+
+        if _insight_exists(title, source_file.id):
+            skipped += 1
+            continue
+
+        insight = Insight(
+            title=title,
+            insight_type="Opportunity",
+            business_area=source_file.business_area,
+            category=_clean(item.get("category")) or "AI Extracted Opportunity",
+            severity="Blue",
+            confidence="Medium",
+            summary=_clean(item.get("why_it_matters")),
+            why_it_matters=_clean(item.get("why_it_matters")),
+            buyer_relevance=None,
+            suggested_action=None,
+            status="open",
+            owner=None,
+            first_seen_at=utcnow(),
+            last_seen_at=utcnow(),
+            trend="New",
+        )
+
+        db.session.add(insight)
+        db.session.flush()
+
+        _create_evidence(
+            insight,
+            source_file,
+            snippet=item.get("source_snippet") or item.get("why_it_matters"),
+        )
+
+        created += 1
+
+    return created, skipped
+
+
+def create_due_diligence_insights_from_analysis(source_file, analysis):
+    created = 0
+    skipped = 0
+
+    dd = analysis.due_diligence_json or {}
+
+    if not dd:
+        return created, skipped
+
+    is_relevant = dd.get("is_relevant")
+    buyer_interest = _clean(dd.get("buyer_interest_level"))
+
+    relevant = is_relevant is True or str(is_relevant).lower() == "true"
+
+    if not relevant and buyer_interest not in ["Medium", "High"]:
+        return created, skipped
+
+    title = f"Due diligence relevance identified: {source_file.original_filename}"
+    title = _truncate(title, 300)
+
+    if _insight_exists(title, source_file.id):
+        return created, skipped + 1
+
+    evidence_gaps = dd.get("evidence_gaps") or []
+    likely_questions = dd.get("likely_buyer_questions") or []
+
+    summary_parts = []
+
+    category = _clean(dd.get("category")) or "Uncategorised"
+    evidence_strength = _clean(dd.get("evidence_strength")) or "Unknown"
+
+    summary_parts.append(f"Category: {category}.")
+    summary_parts.append(f"Buyer interest level: {buyer_interest or 'Unknown'}.")
+    summary_parts.append(f"Evidence strength: {evidence_strength}.")
+
+    if evidence_gaps:
+        summary_parts.append("Evidence gaps: " + "; ".join([_clean(x) for x in evidence_gaps]))
+
+    if likely_questions:
+        summary_parts.append("Likely buyer questions: " + "; ".join([_clean(x) for x in likely_questions]))
+
+    severity = "Amber"
+
+    if buyer_interest == "High":
+        severity = "Red"
+    elif buyer_interest == "Low":
+        severity = "Green"
+
+    insight = Insight(
+        title=title,
+        insight_type="Evidence Gap" if evidence_gaps else "Due Diligence",
+        business_area="PE Exit / Due Diligence",
+        category=category,
+        severity=severity,
+        confidence="Medium",
+        summary=" ".join(summary_parts),
+        why_it_matters="This document may be relevant to PE exit readiness or buyer due diligence.",
+        buyer_relevance="A buyer may request supporting evidence, clarification or trend data connected to this area.",
+        suggested_action="Review the document and decide whether it should be added to the due diligence evidence library.",
+        status="open",
+        owner=None,
+        first_seen_at=utcnow(),
+        last_seen_at=utcnow(),
+        trend="New",
+    )
+
+    db.session.add(insight)
+    db.session.flush()
+
+    _create_evidence(
+        insight,
+        source_file,
+        snippet=analysis.summary or source_file.original_filename,
+    )
+
+    created += 1
+    return created, skipped
+
+
+def materialise_analysis_for_document(source_file_id):
+    source_file = SourceFile.query.get(source_file_id)
+
+    if not source_file:
+        raise ValueError(f"SourceFile not found: {source_file_id}")
+
+    analysis = DocumentAnalysis.query.filter_by(source_file_id=source_file.id).first()
+
+    if not analysis:
+        raise ValueError("No AI analysis exists for this document.")
+
+    created_actions, skipped_actions = create_actions_from_analysis(source_file, analysis)
+
+    (
+        created_risks,
+        skipped_risks,
+        created_risk_insights,
+        skipped_risk_insights,
+    ) = create_risks_and_insights_from_analysis(source_file, analysis)
+
+    created_opportunity_insights, skipped_opportunity_insights = create_opportunity_insights_from_analysis(
+        source_file,
+        analysis,
+    )
+
+    created_dd_insights, skipped_dd_insights = create_due_diligence_insights_from_analysis(
+        source_file,
+        analysis,
+    )
+
+    source_file.processing_status = "records_created"
+    source_file.processed_at = utcnow()
+
+    _log(
+        source_file.id,
+        "materialise_ai",
+        "success",
+        (
+            f"Created {created_actions} action(s), {created_risks} risk(s), "
+            f"{created_risk_insights + created_opportunity_insights + created_dd_insights} insight(s). "
+            f"Skipped {skipped_actions + skipped_risks + skipped_risk_insights + skipped_opportunity_insights + skipped_dd_insights} duplicate/empty item(s)."
+        ),
+    )
+
+    db.session.commit()
+
+    return {
+        "created_actions": created_actions,
+        "skipped_actions": skipped_actions,
+        "created_risks": created_risks,
+        "skipped_risks": skipped_risks,
+        "created_insights": created_risk_insights + created_opportunity_insights + created_dd_insights,
+        "skipped_insights": skipped_risk_insights + skipped_opportunity_insights + skipped_dd_insights,
+    }
+
+
+def materialise_all_reviewed_documents():
+    analyses = DocumentAnalysis.query.order_by(DocumentAnalysis.created_at.asc()).all()
+
+    totals = {
+        "documents": 0,
+        "created_actions": 0,
+        "skipped_actions": 0,
+        "created_risks": 0,
+        "skipped_risks": 0,
+        "created_insights": 0,
+        "skipped_insights": 0,
+        "failed": 0,
+    }
+
+    for analysis in analyses:
+        try:
+            result = materialise_analysis_for_document(analysis.source_file_id)
+            totals["documents"] += 1
+            totals["created_actions"] += result["created_actions"]
+            totals["skipped_actions"] += result["skipped_actions"]
+            totals["created_risks"] += result["created_risks"]
+            totals["skipped_risks"] += result["skipped_risks"]
+            totals["created_insights"] += result["created_insights"]
+            totals["skipped_insights"] += result["skipped_insights"]
+        except Exception:
+            db.session.rollback()
+            totals["failed"] += 1
+
+    return totals

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Documents · SignalDesk{% endblock %}
+{% block page_title %}Document Library{% endblock %}
+
+{% block content %}
+<div class="glass-panel rounded-3xl p-6">
+    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+            <h2 class="text-lg font-semibold">Document Library</h2>
+            <p class="mt-1 text-sm text-slate-400">
+                Every uploaded file is tracked, hashed, extracted and converted into source-linked intelligence.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+            <form method="post" action="{{ url_for('documents.process_all') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-emerald-400">
+                    Process All Uploaded
+                </button>
+            </form>
+
+            <form method="post" action="{{ url_for('documents.materialise_all') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="rounded-xl bg-violet-500 px-4 py-2 text-sm font-bold text-white hover:bg-violet-400">
+                    Create Records from AI
+                </button>
+            </form>
+
+            <a href="{{ url_for('upload.index') }}"
+               class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+                Upload
+            </a>
+        </div>
+    </div>
+
+    <div class="mt-6 overflow-hidden rounded-2xl border border-slate-800">
+        <table class="min-w-full divide-y divide-slate-800">
+            <thead class="bg-slate-950/70">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">File</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Type</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Business Area</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Open</th>
+                </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-800 bg-slate-950/30">
+                {% for document in documents %}
+                    <tr>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-white">{{ document.original_filename }}</div>
+                            <div class="mt-1 text-xs text-slate-500">
+                                Uploaded {{ document.uploaded_at.strftime("%d %b %Y %H:%M") if document.uploaded_at else "" }}
+                                {% if document.parent_file %}
+                                    · Attachment from {{ document.parent_file.original_filename }}
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <td class="px-4 py-3 text-sm text-slate-300">
+                            {{ document.file_ext or "Unknown" }}
+                        </td>
+
+                        <td class="px-4 py-3 text-sm text-slate-300">
+                            {{ document.business_area or "Pending AI classification" }}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            {% if document.processing_status == "records_created" %}
+                                <span class="status-pill bg-violet-400/10 text-violet-300">records created</span>
+                            {% elif document.processing_status == "local_ai_complete" %}
+                                <span class="status-pill bg-sky-400/10 text-sky-300">AI complete</span>
+                            {% elif document.processing_status == "local_ai_queued" %}
+                                <span class="status-pill bg-amber-400/10 text-amber-300">AI queued</span>
+                            {% elif document.processing_status == "local_ai_reviewing" %}
+                                <span class="status-pill bg-blue-400/10 text-blue-300">AI running</span>
+                            {% elif document.processing_status == "local_ai_failed" %}
+                                <span class="status-pill bg-red-400/10 text-red-300">AI failed</span>
+                            {% elif document.processing_status == "extracted" %}
+                                <span class="status-pill bg-emerald-400/10 text-emerald-300">extracted</span>
+                            {% elif document.processing_status == "failed" %}
+                                <span class="status-pill bg-red-400/10 text-red-300">failed</span>
+                            {% elif document.processing_status == "extracting" %}
+                                <span class="status-pill bg-amber-400/10 text-amber-300">extracting</span>
+                            {% else %}
+                                <span class="status-pill bg-slate-800 text-slate-300">{{ document.processing_status }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-3 text-right">
+                            <a href="{{ url_for('documents.detail', document_id=document.id) }}"
+                               class="text-sm font-semibold text-cyan-300 hover:text-cyan-200">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-10 text-center text-sm text-slate-500">
+                            No documents uploaded yet.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

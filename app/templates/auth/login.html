@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in · SignalDesk{% endblock %}
+
+{% block public_content %}
+<div class="w-full max-w-md">
+    <div class="glass-panel rounded-3xl p-8">
+        <div class="mb-8">
+            <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/20">
+                SD
+            </div>
+            <h1 class="text-2xl font-semibold tracking-tight text-white">Sign in to SignalDesk</h1>
+            <p class="mt-2 text-sm text-slate-400">
+                Private executive intelligence, local-first document review and exit readiness monitoring.
+            </p>
+        </div>
+
+        <form method="post" class="space-y-5">
+            {{ form.hidden_tag() }}
+
+            <div>
+                <label class="mb-2 block text-sm font-medium text-slate-300">{{ form.username.label }}</label>
+                {{ form.username(class="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400") }}
+            </div>
+
+            <div>
+                <label class="mb-2 block text-sm font-medium text-slate-300">{{ form.password.label }}</label>
+                {{ form.password(class="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400") }}
+            </div>
+
+            <button type="submit"
+                    class="w-full rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+                Sign in
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

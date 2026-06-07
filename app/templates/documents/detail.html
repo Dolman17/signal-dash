@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+
+{% block title %}{{ document.original_filename }} · SignalDesk{% endblock %}
+{% block page_title %}Document Detail{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-3">
+    <div class="glass-panel rounded-3xl p-6 xl:col-span-2">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-white">{{ document.original_filename }}</h2>
+                <p class="mt-2 text-sm text-slate-400">
+                    Stored locally, extracted locally, reviewed using your local Ollama models, then converted into actions, risks and insights.
+                </p>
+            </div>
+
+            <div class="flex shrink-0 flex-wrap gap-3">
+                <form method="post" action="{{ url_for('documents.process', document_id=document.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit"
+                            class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-emerald-400">
+                        Process document
+                    </button>
+                </form>
+
+                <form method="post" action="{{ url_for('documents.local_ai_review', document_id=document.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit"
+                            class="rounded-xl bg-violet-500 px-4 py-2 text-sm font-bold text-white hover:bg-violet-400">
+                        Run Local AI Review
+                    </button>
+                </form>
+
+                {% if analysis %}
+                    <form method="post" action="{{ url_for('documents.materialise', document_id=document.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit"
+                                class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-amber-400">
+                            Create Actions/Risks/Insights
+                        </button>
+                    </form>
+                {% endif %}
+
+                <a href="{{ url_for('documents.download', document_id=document.id) }}"
+                   class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700">
+                    Download original
+                </a>
+            </div>
+        </div>
+
+        <div class="mt-6 grid gap-4 md:grid-cols-2">
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <div class="text-xs uppercase tracking-wider text-slate-500">Processing status</div>
+                <div class="mt-2 text-sm font-semibold text-white">{{ document.processing_status }}</div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <div class="text-xs uppercase tracking-wider text-slate-500">Business area</div>
+                <div class="mt-2 text-sm font-semibold text-white">{{ document.business_area or "Pending AI classification" }}</div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <div class="text-xs uppercase tracking-wider text-slate-500">Document category</div>
+                <div class="mt-2 text-sm font-semibold text-white">{{ document.document_category or "Pending AI classification" }}</div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                <div class="text-xs uppercase tracking-wider text-slate-500">Sensitivity</div>
+                <div class="mt-2 text-sm font-semibold text-white">{{ document.sensitivity_level or "Unknown" }}</div>
+            </div>
+        </div>
+
+        {% if document.email_message %}
+            <div class="mt-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
+                <h3 class="text-sm font-semibold text-cyan-100">Email metadata</h3>
+
+                <dl class="mt-4 grid gap-4 text-sm md:grid-cols-2">
+                    <div>
+                        <dt class="text-cyan-100/60">Subject</dt>
+                        <dd class="mt-1 text-cyan-50">{{ document.email_message.subject or "Unknown" }}</dd>
+                    </div>
+
+                    <div>
+                        <dt class="text-cyan-100/60">From</dt>
+                        <dd class="mt-1 text-cyan-50">
+                            {{ document.email_message.sender_name or "" }}
+                            {% if document.email_message.sender_email %}
+                                &lt;{{ document.email_message.sender_email }}&gt;
+                            {% endif %}
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt class="text-cyan-100/60">Sent</dt>
+                        <dd class="mt-1 text-cyan-50">
+                            {{ document.email_message.sent_at.strftime("%d %b %Y %H:%M") if document.email_message.sent_at else "Unknown" }}
+                        </dd>
+                    </div>
+
+                    <div>
+                        <dt class="text-cyan-100/60">Recipients</dt>
+                        <dd class="mt-1 text-cyan-50">
+                            {{ document.email_message.recipients|length }}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        {% endif %}
+
+        <div class="mt-6 rounded-2xl border border-violet-400/20 bg-violet-400/10 p-5">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-sm font-semibold text-violet-100">Local AI Analysis</h3>
+                    <p class="mt-1 text-xs text-violet-100/70">
+                        Generated locally using Ollama. No OpenAI call is made here.
+                    </p>
+                </div>
+
+                {% if analysis %}
+                    <span class="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                        Complete
+                    </span>
+                {% elif document.processing_status == "local_ai_queued" %}
+                    <span class="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                        Queued
+                    </span>
+                {% elif document.processing_status == "local_ai_reviewing" %}
+                    <span class="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-300">
+                        Running
+                    </span>
+                {% elif document.processing_status == "local_ai_failed" %}
+                    <span class="rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1 text-xs font-semibold text-red-300">
+                        Failed
+                    </span>
+                {% else %}
+                    <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
+                        Not run
+                    </span>
+                {% endif %}
+            </div>
+
+            {% if analysis %}
+                <div class="mt-5 space-y-5">
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                        <h4 class="text-sm font-semibold text-white">Executive Summary</h4>
+                        <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{{ analysis.summary or "No summary generated." }}</p>
+                    </div>
+
+                    {% if analysis.detailed_summary %}
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                            <h4 class="text-sm font-semibold text-white">Detailed Summary</h4>
+                            <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{{ analysis.detailed_summary }}</p>
+                        </div>
+                    {% endif %}
+
+                    <div class="grid gap-5 xl:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                            <h4 class="text-sm font-semibold text-white">Key Points</h4>
+                            <ul class="mt-3 space-y-2 text-sm text-slate-300">
+                                {% for item in analysis.key_points_json or [] %}
+                                    <li class="rounded-xl bg-slate-900 p-3">{{ item }}</li>
+                                {% else %}
+                                    <li class="text-slate-500">No key points extracted.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                            <h4 class="text-sm font-semibold text-white">Recommended Follow-up</h4>
+                            {% set followups = (analysis.due_diligence_json or {}).get("recommended_follow_up", []) %}
+                            <ul class="mt-3 space-y-2 text-sm text-slate-300">
+                                {% for item in followups %}
+                                    <li class="rounded-xl bg-slate-900 p-3">{{ item }}</li>
+                                {% else %}
+                                    <li class="text-slate-500">No follow-up extracted yet.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-red-100">Risks / Possible Issues</h4>
+
+                        <div class="mt-3 space-y-3">
+                            {% for risk in analysis.risks_json or [] %}
+                                <div class="rounded-2xl border border-red-400/20 bg-slate-950/70 p-4">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="font-semibold text-red-100">{{ risk.get("title", "Untitled risk") }}</div>
+                                        <span class="rounded-full bg-red-400/10 px-3 py-1 text-xs font-semibold text-red-200">
+                                            {{ risk.get("severity", "Unknown") }}
+                                        </span>
+                                    </div>
+
+                                    {% if risk.get("why_it_matters") %}
+                                        <p class="mt-2 text-sm leading-6 text-slate-300">{{ risk.get("why_it_matters") }}</p>
+                                    {% endif %}
+
+                                    {% if risk.get("buyer_relevance") %}
+                                        <p class="mt-2 text-xs leading-5 text-red-100/70">
+                                            Buyer relevance: {{ risk.get("buyer_relevance") }}
+                                        </p>
+                                    {% endif %}
+
+                                    {% if risk.get("source_snippet") %}
+                                        <blockquote class="mt-3 rounded-xl border-l-4 border-red-300/40 bg-red-950/20 p-3 text-xs leading-5 text-red-100/80">
+                                            {{ risk.get("source_snippet") }}
+                                        </blockquote>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <div class="text-sm text-red-100/70">No risks extracted.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-emerald-100">Opportunities / Positive Signals</h4>
+
+                        <div class="mt-3 space-y-3">
+                            {% for opportunity in analysis.opportunities_json or [] %}
+                                <div class="rounded-2xl border border-emerald-400/20 bg-slate-950/70 p-4">
+                                    <div class="font-semibold text-emerald-100">{{ opportunity.get("title", "Untitled opportunity") }}</div>
+
+                                    {% if opportunity.get("why_it_matters") %}
+                                        <p class="mt-2 text-sm leading-6 text-slate-300">{{ opportunity.get("why_it_matters") }}</p>
+                                    {% endif %}
+
+                                    {% if opportunity.get("source_snippet") %}
+                                        <blockquote class="mt-3 rounded-xl border-l-4 border-emerald-300/40 bg-emerald-950/20 p-3 text-xs leading-5 text-emerald-100/80">
+                                            {{ opportunity.get("source_snippet") }}
+                                        </blockquote>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <div class="text-sm text-emerald-100/70">No opportunities extracted.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="grid gap-5 xl:grid-cols-2">
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                            <h4 class="text-sm font-semibold text-white">Actions</h4>
+                            <div class="mt-3 space-y-3">
+                                {% for action in analysis.actions_json or [] %}
+                                    <div class="rounded-xl bg-slate-900 p-3 text-sm text-slate-300">
+                                        <div class="font-semibold text-white">{{ action.get("title", "Untitled action") }}</div>
+                                        {% if action.get("description") %}
+                                            <div class="mt-1 text-slate-400">{{ action.get("description") }}</div>
+                                        {% endif %}
+                                        <div class="mt-2 text-xs text-slate-500">
+                                            Owner: {{ action.get("owner") or "Unknown" }} · Priority: {{ action.get("priority") or "Unknown" }}
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="text-sm text-slate-500">No actions extracted.</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                            <h4 class="text-sm font-semibold text-white">Entities</h4>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                {% for entity in analysis.entities_json or [] %}
+                                    <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-300">
+                                        {{ entity.get("name") }} · {{ entity.get("entity_type") }}
+                                    </span>
+                                {% else %}
+                                    <div class="text-sm text-slate-500">No entities extracted.</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-amber-100">Due Diligence / Exit Relevance</h4>
+
+                        {% set dd = analysis.due_diligence_json or {} %}
+                        <dl class="mt-4 grid gap-4 text-sm md:grid-cols-2">
+                            <div>
+                                <dt class="text-amber-100/60">Relevant</dt>
+                                <dd class="mt-1 text-amber-50">{{ dd.get("is_relevant", "Unknown") }}</dd>
+                            </div>
+
+                            <div>
+                                <dt class="text-amber-100/60">Category</dt>
+                                <dd class="mt-1 text-amber-50">{{ dd.get("category", "Unknown") }}</dd>
+                            </div>
+
+                            <div>
+                                <dt class="text-amber-100/60">Buyer interest</dt>
+                                <dd class="mt-1 text-amber-50">{{ dd.get("buyer_interest_level", "Unknown") }}</dd>
+                            </div>
+
+                            <div>
+                                <dt class="text-amber-100/60">Evidence strength</dt>
+                                <dd class="mt-1 text-amber-50">{{ dd.get("evidence_strength", "Unknown") }}</dd>
+                            </div>
+                        </dl>
+
+                        {% if dd.get("evidence_gaps") %}
+                            <div class="mt-5">
+                                <div class="text-xs font-semibold uppercase tracking-wider text-amber-100/60">Evidence gaps</div>
+                                <ul class="mt-2 space-y-2 text-sm text-amber-50">
+                                    {% for gap in dd.get("evidence_gaps") %}
+                                        <li class="rounded-xl bg-slate-950/70 p-3">{{ gap }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+
+                        {% if analysis.buyer_questions_json %}
+                            <div class="mt-5">
+                                <div class="text-xs font-semibold uppercase tracking-wider text-amber-100/60">Likely buyer questions</div>
+                                <ul class="mt-2 space-y-2 text-sm text-amber-50">
+                                    {% for question in analysis.buyer_questions_json %}
+                                        <li class="rounded-xl bg-slate-950/70 p-3">{{ question }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                        <h4 class="text-sm font-semibold text-white">Model Route</h4>
+                        <p class="mt-2 break-words text-xs leading-5 text-slate-500">
+                            {{ analysis.model_name }}
+                        </p>
+                    </div>
+                </div>
+            {% else %}
+                {% if document.processing_status == "local_ai_queued" %}
+                    <p class="mt-4 text-sm leading-6 text-amber-100/80">
+                        Local AI review is queued. Start the worker if it is not already running.
+                    </p>
+                {% elif document.processing_status == "local_ai_reviewing" %}
+                    <p class="mt-4 text-sm leading-6 text-sky-100/80">
+                        Local AI review is currently running in the background. Refresh this page shortly.
+                    </p>
+                {% elif document.processing_status == "local_ai_failed" %}
+                    <p class="mt-4 text-sm leading-6 text-red-100/80">
+                        Local AI review failed. Check the processing log for details, then retry.
+                    </p>
+                {% else %}
+                    <p class="mt-4 text-sm leading-6 text-violet-100/70">
+                        No local AI review has been run yet. First click <strong>Process document</strong>,
+                        then click <strong>Run Local AI Review</strong>.
+                    </p>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+            <h3 class="text-sm font-semibold text-white">Extracted text preview</h3>
+
+            {% if document.document_text and document.document_text.text_preview %}
+                <div class="mt-4 max-h-[34rem] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm leading-6 text-slate-300">
+{{ document.document_text.text_preview }}
+                </div>
+
+                <div class="mt-4 grid gap-4 text-sm md:grid-cols-3">
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                        <div class="text-xs uppercase tracking-wider text-slate-500">Words</div>
+                        <div class="mt-2 font-semibold text-white">{{ document.document_text.word_count }}</div>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                        <div class="text-xs uppercase tracking-wider text-slate-500">Characters</div>
+                        <div class="mt-2 font-semibold text-white">{{ document.document_text.char_count }}</div>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                        <div class="text-xs uppercase tracking-wider text-slate-500">Method</div>
+                        <div class="mt-2 font-semibold text-white">{{ document.document_text.extraction_method }}</div>
+                    </div>
+                </div>
+            {% else %}
+                <p class="mt-2 text-sm text-slate-500">
+                    No extracted text yet. Click Process document.
+                </p>
+            {% endif %}
+        </div>
+
+        {% if document.child_files %}
+            <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5">
+                <h3 class="text-sm font-semibold text-white">Extracted attachments</h3>
+
+                <div class="mt-4 space-y-3">
+                    {% for child in document.child_files %}
+                        <div class="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                            <div>
+                                <a href="{{ url_for('documents.detail', document_id=child.id) }}"
+                                   class="font-medium text-cyan-200 hover:text-cyan-100">
+                                    {{ child.original_filename }}
+                                </a>
+                                <div class="mt-1 text-xs text-slate-500">{{ child.file_ext }} · {{ child.processing_status }}</div>
+                            </div>
+
+                            <a href="{{ url_for('documents.download', document_id=child.id) }}"
+                               class="text-sm font-semibold text-slate-300 hover:text-white">
+                                Download
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="space-y-6">
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">File metadata</h3>
+
+            <dl class="mt-4 space-y-4 text-sm">
+                <div>
+                    <dt class="text-slate-500">Stored filename</dt>
+                    <dd class="mt-1 break-all text-slate-300">{{ document.stored_filename }}</dd>
+                </div>
+
+                <div>
+                    <dt class="text-slate-500">SHA256 hash</dt>
+                    <dd class="mt-1 break-all font-mono text-xs text-slate-400">{{ document.sha256_hash }}</dd>
+                </div>
+
+                <div>
+                    <dt class="text-slate-500">MIME type</dt>
+                    <dd class="mt-1 text-slate-300">{{ document.mime_type or "Unknown" }}</dd>
+                </div>
+
+                <div>
+                    <dt class="text-slate-500">Uploaded</dt>
+                    <dd class="mt-1 text-slate-300">
+                        {{ document.uploaded_at.strftime("%d %b %Y %H:%M") if document.uploaded_at else "" }}
+                    </dd>
+                </div>
+
+                {% if document.parent_file %}
+                    <div>
+                        <dt class="text-slate-500">Parent file</dt>
+                        <dd class="mt-1">
+                            <a href="{{ url_for('documents.detail', document_id=document.parent_file.id) }}"
+                               class="text-cyan-300 hover:text-cyan-200">
+                                {{ document.parent_file.original_filename }}
+                            </a>
+                        </dd>
+                    </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        {% if document.processing_error %}
+            <div class="glass-panel rounded-3xl border border-red-400/20 bg-red-400/10 p-6">
+                <h3 class="text-sm font-semibold text-red-100">Latest error</h3>
+                <p class="mt-3 whitespace-pre-wrap text-xs leading-5 text-red-100/80">{{ document.processing_error }}</p>
+            </div>
+        {% endif %}
+
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">Processing log</h3>
+
+            <div class="mt-4 space-y-3">
+                {% for log in document.processing_logs %}
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="text-sm font-semibold text-slate-200">{{ log.stage }}</div>
+                            <span class="status-pill bg-slate-800 text-slate-300">{{ log.status }}</span>
+                        </div>
+
+                        {% if log.message %}
+                            <div class="mt-2 text-xs leading-5 text-slate-500">{{ log.message }}</div>
+                        {% endif %}
+
+                        {% if log.duration_ms %}
+                            <div class="mt-2 text-xs text-slate-600">{{ log.duration_ms }}ms</div>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="text-sm text-slate-500">No processing logs yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

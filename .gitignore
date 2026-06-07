@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Flask
+instance/
+.webassets-cache
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Database
+*.sqlite
+*.sqlite3
+signaldash_dev.sqlite3
+
+# Local SignalDesk storage
+local_storage/
+local_ingest/
+local_backups/
+local_logs/
+
+# Migrations cache
+migrations/__pycache__/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
