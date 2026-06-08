@@ -81,6 +81,34 @@ services:
       - /srv/signaldash/backups:/srv/signaldash/backups
       - /srv/signaldash/logs:/srv/signaldash/logs
 
+  signaldash-ingest-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signaldash-ingest-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      RUN_MIGRATIONS: "0"
+      REDIS_URL: "redis://signaldash-redis:6379/0"
+      AUTO_INGEST_ENABLED: "true"
+      AUTO_INGEST_INTERVAL_SECONDS: "900"
+      AUTO_INGEST_RUN_ON_STARTUP: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      signaldash-db:
+        condition: service_healthy
+      signaldash-redis:
+        condition: service_healthy
+    command: ["python", "-m", "app.jobs.ingest_scheduler"]
+    volumes:
+      - /srv/signaldash/storage:/srv/signaldash/storage
+      - /srv/signaldash/ingest:/srv/signaldash/ingest
+      - /srv/signaldash/backups:/srv/signaldash/backups
+      - /srv/signaldash/logs:/srv/signaldash/logs
+
 volumes:
   signaldash_postgres_data:
   signaldash_redis_data:
