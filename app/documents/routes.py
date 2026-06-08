@@ -15,9 +15,11 @@ from app.models import (
     SourceFile,
     utcnow,
 )
+from app.services.due_diligence_service import build_due_diligence_library
 from app.services.extraction import extract_source_file
 from app.services.materialise import materialise_all_reviewed_documents, materialise_analysis_for_document
 from app.services.queueing import enqueue_local_ai_review
+
 
 documents_bp = Blueprint("documents", __name__, url_prefix="/documents")
 
@@ -46,7 +48,6 @@ AI_BUSY_STATUSES = {
 }
 
 
-
 def _log(source_file_id, stage, status, message=None):
     entry = ProcessingLog(
         source_file_id=source_file_id,
@@ -59,7 +60,6 @@ def _log(source_file_id, stage, status, message=None):
     db.session.add(entry)
 
 
-
 def _is_deletable_attachment_noise(document):
     file_ext = (document.file_ext or "").lower()
 
@@ -70,7 +70,6 @@ def _is_deletable_attachment_noise(document):
     )
 
 
-
 def _is_email_image_attachment(document):
     file_ext = (document.file_ext or "").lower()
 
@@ -79,7 +78,6 @@ def _is_email_image_attachment(document):
         and document.parent_file_id is not None
         and file_ext in DELETABLE_ATTACHMENT_EXTENSIONS
     )
-
 
 
 def _is_ai_queue_candidate(document):
@@ -101,6 +99,21 @@ def _is_ai_queue_candidate(document):
     return True
 
 
+def _due_diligence_categories_for_document(document_id):
+    library = build_due_diligence_library()
+    matched = []
+
+    for category in library["categories"]:
+        document_ids = {item.get("id") for item in category.get("documents", [])}
+        analysis_source_ids = {item.get("source_file_id") for item in category.get("analyses", [])}
+        risk_source_ids = {item.get("source_file_id") for item in category.get("risks", [])}
+        action_source_ids = {item.get("source_file_id") for item in category.get("actions", [])}
+
+        if document_id in document_ids or document_id in analysis_source_ids or document_id in risk_source_ids or document_id in action_source_ids:
+            matched.append(category)
+
+    return matched
+
 
 def _delete_file_if_safe(path_value):
     if not path_value:
@@ -113,7 +126,6 @@ def _delete_file_if_safe(path_value):
     except Exception:
         # Disk cleanup should not block DB cleanup.
         pass
-
 
 
 def _delete_source_file_and_disk(document):
@@ -155,7 +167,6 @@ def _delete_source_file_and_disk(document):
     return original_filename
 
 
-
 def _filter_options():
     def values_for(column):
         rows = (
@@ -173,7 +184,6 @@ def _filter_options():
         "business_areas": values_for(SourceFile.business_area),
         "source_types": values_for(SourceFile.source_type),
     }
-
 
 
 def _apply_document_filters(query):
@@ -219,7 +229,6 @@ def _apply_document_filters(query):
     return query
 
 
-
 @documents_bp.route("/")
 @login_required
 def index():
@@ -248,7 +257,6 @@ def index():
         email_image_noise_count=email_image_noise_count,
         ai_queue_candidate_count=ai_queue_candidate_count,
     )
-
 
 
 @documents_bp.route("/process-all", methods=["POST"])
@@ -281,7 +289,6 @@ def process_all():
         flash("No uploaded or failed documents needed processing.", "info")
 
     return redirect(url_for("documents.index"))
-
 
 
 @documents_bp.route("/queue-ai-extracted", methods=["POST"])
@@ -336,7 +343,6 @@ def queue_ai_extracted():
                 "failed",
                 f"Bulk queue failed: {exc}",
             )
-
     db.session.commit()
 
     if queued:
@@ -352,7 +358,6 @@ def queue_ai_extracted():
         flash("No extracted documents were eligible for local AI review.", "info")
 
     return redirect(url_for("documents.index"))
-
 
 
 @documents_bp.route("/cleanup-email-images", methods=["POST"])
@@ -408,7 +413,6 @@ def cleanup_email_images():
     return redirect(url_for("documents.index"))
 
 
-
 @documents_bp.route("/materialise-all", methods=["POST"])
 @login_required
 def materialise_all():
@@ -436,21 +440,21 @@ def materialise_all():
     return redirect(url_for("documents.index"))
 
 
-
 @documents_bp.route("/<int:document_id>")
 @login_required
 def detail(document_id):
     document = SourceFile.query.get_or_404(document_id)
     analysis = DocumentAnalysis.query.filter_by(source_file_id=document.id).first()
     can_delete_attachment_noise = _is_deletable_attachment_noise(document)
+    due_diligence_categories = _due_diligence_categories_for_document(document.id)
 
     return render_template(
         "documents/detail.html",
         document=document,
         analysis=analysis,
         can_delete_attachment_noise=can_delete_attachment_noise,
+        due_diligence_categories=due_diligence_categories,
     )
-
 
 
 @documents_bp.route("/<int:document_id>/download")
@@ -468,7 +472,6 @@ def download(document_id):
     )
 
 
-
 @documents_bp.route("/<int:document_id>/process", methods=["POST"])
 @login_required
 def process(document_id):
@@ -482,7 +485,6 @@ def process(document_id):
         flash(f"Document processing failed: {exc}", "error")
 
     return redirect(url_for("documents.detail", document_id=document.id))
-
 
 
 @documents_bp.route("/<int:document_id>/local-ai-review", methods=["POST"])
@@ -522,7 +524,6 @@ def local_ai_review(document_id):
     return redirect(url_for("documents.detail", document_id=document.id))
 
 
-
 @documents_bp.route("/<int:document_id>/materialise", methods=["POST"])
 @login_required
 def materialise(document_id):
@@ -546,7 +547,6 @@ def materialise(document_id):
         flash(f"Could not create records from AI analysis: {exc}", "error")
 
     return redirect(url_for("documents.detail", document_id=document.id))
-
 
 
 @documents_bp.route("/<int:document_id>/delete-attachment", methods=["POST"])
