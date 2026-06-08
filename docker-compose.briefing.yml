@@ -1,0 +1,19 @@
+services:
+  signaldash-briefing-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signaldash-briefing-worker
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      RUN_MIGRATIONS: "0"
+      REDIS_URL: "redis://signaldash-redis:6379/0"
+      WORKER_QUEUES: "briefings,cloud_ai"
+    depends_on:
+      signaldash-db:
+        condition: service_healthy
+      signaldash-redis:
+        condition: service_healthy
+    command: ["python", "worker.py"]
