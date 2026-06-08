@@ -45,3 +45,21 @@ def enqueue_daily_briefing(target_date=None):
     )
 
     return job
+
+
+def enqueue_end_of_day_briefing(target_date=None):
+    queue = get_queue("briefings")
+
+    briefing_date = target_date or date.today()
+    briefing_date_iso = briefing_date.isoformat()
+
+    job = queue.enqueue(
+        "app.jobs.briefing_jobs.run_end_of_day_briefing_job",
+        briefing_date_iso,
+        job_timeout=1800,
+        result_ttl=86400,
+        failure_ttl=86400,
+        description=f"End-of-day GPT briefing for {briefing_date_iso}",
+    )
+
+    return job
