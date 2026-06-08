@@ -1,0 +1,7 @@
+Paste-over change required in app/__init__.py:
+
+1. Add with the other blueprint imports:
+from app.due_diligence.routes import due_diligence_bp
+
+2. Add after app.register_blueprint(ingest_bp):
+app.register_blueprint(due_diligence_bp)
