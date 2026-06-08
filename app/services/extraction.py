@@ -38,6 +38,31 @@ class ExtractionResult:
     metadata: dict | None = None
 
 
+EMAIL_IMAGE_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".svg",
+    ".ico",
+    ".tif",
+    ".tiff",
+}
+
+EMAIL_IMAGE_CONTENT_TYPES = {
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/svg+xml",
+    "image/x-icon",
+    "image/tiff",
+}
+
+
 def _now():
     return utcnow()
 
@@ -110,6 +135,7 @@ def _normalise_text(text: str) -> str:
     text = text.replace("\x00", "")
     lines = [line.rstrip() for line in text.splitlines()]
     compact = "\n".join(lines)
+
     while "\n\n\n" in compact:
         compact = compact.replace("\n\n\n", "\n\n")
 
@@ -141,6 +167,52 @@ def _chunk_text(text: str, max_chars: int = 4500) -> list[str]:
         chunks = [text[i:i + max_chars] for i in range(0, len(text), max_chars)]
 
     return chunks
+
+
+def _is_email_image_part(content_type=None, filename=None) -> bool:
+    content_type = (content_type or "").lower().strip()
+    filename = filename or ""
+
+    file_ext = Path(filename).suffix.lower() if filename else ""
+
+    if content_type.startswith("image/"):
+        return True
+
+    if content_type in EMAIL_IMAGE_CONTENT_TYPES:
+        return True
+
+    if file_ext in EMAIL_IMAGE_EXTENSIONS:
+        return True
+
+    return False
+
+
+def _is_msg_image_attachment(attachment, filename=None) -> bool:
+    filename = filename or ""
+    file_ext = Path(filename).suffix.lower() if filename else ""
+
+    mime_type = ""
+    try:
+        mime_type = getattr(attachment, "mimetype", "") or ""
+    except Exception:
+        mime_type = ""
+
+    content_type = ""
+    try:
+        content_type = getattr(attachment, "contentType", "") or ""
+    except Exception:
+        content_type = ""
+
+    if _is_email_image_part(mime_type, filename):
+        return True
+
+    if _is_email_image_part(content_type, filename):
+        return True
+
+    if file_ext in EMAIL_IMAGE_EXTENSIONS:
+        return True
+
+    return False
 
 
 def extract_txt_like(file_path: Path) -> ExtractionResult:
@@ -313,10 +385,19 @@ def extract_eml(file_path: Path, source_file: SourceFile) -> ExtractionResult:
     html_parts = []
 
     attachment_count = 0
+    skipped_image_count = 0
 
     for part in msg.walk():
         content_disposition = part.get_content_disposition()
         content_type = part.get_content_type()
+        filename = _safe_decode(part.get_filename())
+
+        if part.is_multipart():
+            continue
+
+        if _is_email_image_part(content_type, filename):
+            skipped_image_count += 1
+            continue
 
         if content_disposition == "attachment":
             attachment_count += 1
@@ -381,12 +462,19 @@ def extract_eml(file_path: Path, source_file: SourceFile) -> ExtractionResult:
     return ExtractionResult(
         text=text,
         method="eml_parser",
-        metadata={"attachment_count": attachment_count},
+        metadata={
+            "attachment_count": attachment_count,
+            "skipped_image_count": skipped_image_count,
+        },
     )
 
 
 def _save_eml_attachment(part, parent_source_file: SourceFile):
     filename = part.get_filename()
+    content_type = part.get_content_type()
+
+    if _is_email_image_part(content_type, filename):
+        return
 
     if not filename:
         filename = f"attachment-{uuid.uuid4().hex}"
@@ -394,6 +482,10 @@ def _save_eml_attachment(part, parent_source_file: SourceFile):
     filename = _safe_decode(filename) or f"attachment-{uuid.uuid4().hex}"
     safe_name = secure_filename(filename)
     file_ext = Path(safe_name).suffix.lower()
+
+    if file_ext in EMAIL_IMAGE_EXTENSIONS:
+        return
+
     stored_filename = f"{uuid.uuid4().hex}{file_ext}"
 
     attachments_dir = Path(parent_source_file.storage_path).resolve().parents[1] / "attachments"
@@ -407,6 +499,10 @@ def _save_eml_attachment(part, parent_source_file: SourceFile):
     file_size = destination.stat().st_size
     sha256_hash = _calculate_sha256(destination)
     mime_type, _ = mimetypes.guess_type(str(destination))
+
+    if _is_email_image_part(mime_type, filename):
+        destination.unlink(missing_ok=True)
+        return
 
     existing = SourceFile.query.filter_by(
         sha256_hash=sha256_hash,
@@ -475,19 +571,30 @@ def extract_msg(file_path: Path, source_file: SourceFile) -> ExtractionResult:
     email_record.thread_key = subject
 
     attachment_count = 0
+    skipped_image_count = 0
 
     attachments_dir = Path(source_file.storage_path).resolve().parents[1] / "attachments"
     attachments_dir.mkdir(parents=True, exist_ok=True)
 
     for attachment in msg.attachments:
-        attachment_count += 1
-
         filename = getattr(attachment, "longFilename", None) or getattr(attachment, "shortFilename", None)
+
         if not filename:
             filename = f"attachment-{uuid.uuid4().hex}"
 
+        if _is_msg_image_attachment(attachment, filename):
+            skipped_image_count += 1
+            continue
+
+        attachment_count += 1
+
         safe_name = secure_filename(filename)
         file_ext = Path(safe_name).suffix.lower()
+
+        if file_ext in EMAIL_IMAGE_EXTENSIONS:
+            skipped_image_count += 1
+            continue
+
         stored_filename = f"{uuid.uuid4().hex}{file_ext}"
         destination = attachments_dir / stored_filename
 
@@ -500,6 +607,11 @@ def extract_msg(file_path: Path, source_file: SourceFile) -> ExtractionResult:
         file_size = destination.stat().st_size
         sha256_hash = _calculate_sha256(destination)
         mime_type, _ = mimetypes.guess_type(str(destination))
+
+        if _is_email_image_part(mime_type, filename):
+            destination.unlink(missing_ok=True)
+            skipped_image_count += 1
+            continue
 
         existing = SourceFile.query.filter_by(
             sha256_hash=sha256_hash,
@@ -550,7 +662,10 @@ def extract_msg(file_path: Path, source_file: SourceFile) -> ExtractionResult:
     return ExtractionResult(
         text=text,
         method="extract_msg",
-        metadata={"attachment_count": attachment_count},
+        metadata={
+            "attachment_count": attachment_count,
+            "skipped_image_count": skipped_image_count,
+        },
     )
 
 
@@ -639,11 +754,21 @@ def extract_source_file(source_file_id: int) -> SourceFile:
         source_file.processed_at = _now()
         source_file.processing_error = None
 
+        meta = result.metadata or {}
+        skipped_image_count = meta.get("skipped_image_count", 0)
+        attachment_count = meta.get("attachment_count", 0)
+
+        extra_message = ""
+        if skipped_image_count:
+            extra_message = f" Skipped {skipped_image_count} embedded email image(s)."
+        if attachment_count:
+            extra_message += f" Saved {attachment_count} non-image attachment(s)."
+
         _log(
             source_file.id,
             "extraction",
             "success",
-            f"Extracted {len(text)} characters into {len(chunks)} chunk(s) using {result.method}.",
+            f"Extracted {len(text)} characters into {len(chunks)} chunk(s) using {result.method}.{extra_message}",
             started_at,
         )
 
