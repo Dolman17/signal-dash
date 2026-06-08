@@ -3,6 +3,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from redis import Redis
+
 from app import create_app
 from app.extensions import db
 from app.models import (
@@ -44,6 +46,12 @@ AI_COMPLETE_STATUSES = {
     "records_created",
 }
 
+WORKFLOW_CONTROL_KEYS = {
+    "auto_ingest": "signaldash:auto_ingest_enabled",
+    "auto_extract": "signaldash:auto_extract_enabled",
+    "auto_ai": "signaldash:auto_ai_queue_enabled",
+}
+
 
 def _bool_env(name, default="true"):
     return str(os.getenv(name, default)).strip().lower() in {"1", "true", "yes", "on"}
@@ -54,6 +62,42 @@ def _int_env(name, default):
         return int(os.getenv(name, default))
     except Exception:
         return int(default)
+
+
+def _redis_connection():
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    return Redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+
+
+def _runtime_flag(conn, control_name, default=True):
+    key = WORKFLOW_CONTROL_KEYS[control_name]
+    value = conn.get(key)
+
+    if value is None:
+        conn.set(key, "true" if default else "false")
+        return default
+
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _runtime_controls(default_ingest=True, default_extract=True, default_ai=True):
+    try:
+        conn = _redis_connection()
+        return {
+            "auto_ingest": _runtime_flag(conn, "auto_ingest", default_ingest),
+            "auto_extract": _runtime_flag(conn, "auto_extract", default_extract),
+            "auto_ai": _runtime_flag(conn, "auto_ai", default_ai),
+        }
+    except Exception as exc:
+        print(f"[SignalDash ingest workflow] could not read Redis runtime controls: {exc}", flush=True)
+        return {
+            "auto_ingest": default_ingest,
+            "auto_extract": default_extract,
+            "auto_ai": default_ai,
+        }
 
 
 def _log(source_file_id, stage, status, message=None):
@@ -271,15 +315,25 @@ def queue_local_ai_batch(limit=5):
     }
 
 
-def run_workflow(queue_ai=False, auto_extract=True):
+def run_workflow(queue_ai=False, auto_ingest=True, auto_extract=True):
     app = create_app()
 
     with app.app_context():
-        ingest_result = scan_ingest_folder(
-            uploaded_by_id=None,
-            business_area=None,
-            move_after_ingest=True,
-        )
+        if auto_ingest:
+            ingest_result = scan_ingest_folder(
+                uploaded_by_id=None,
+                business_area=None,
+                move_after_ingest=True,
+            )
+        else:
+            ingest_result = {
+                "scanned": 0,
+                "ingested": 0,
+                "duplicates": 0,
+                "rejected": 0,
+                "failed": 0,
+                "disabled": True,
+            }
 
         if auto_extract:
             extraction_limit = max(1, _int_env("AUTO_EXTRACT_BATCH_SIZE", 10))
@@ -310,6 +364,7 @@ def run_workflow(queue_ai=False, auto_extract=True):
         print(
             "[SignalDash ingest workflow] "
             f"{timestamp} "
+            f"auto_ingest_disabled={ingest_result.get('disabled', False)} "
             f"scanned={ingest_result.get('scanned', 0)} "
             f"ingested={ingest_result.get('ingested', 0)} "
             f"duplicates={ingest_result.get('duplicates', 0)} "
@@ -335,35 +390,35 @@ def run_workflow(queue_ai=False, auto_extract=True):
 
 
 def main():
-    enabled = _bool_env("AUTO_INGEST_ENABLED", "true")
+    default_ingest_enabled = _bool_env("AUTO_INGEST_ENABLED", "true")
     interval_seconds = max(60, _int_env("AUTO_INGEST_INTERVAL_SECONDS", 900))
     ai_interval_seconds = max(interval_seconds, _int_env("AUTO_AI_INTERVAL_SECONDS", 1800))
     run_on_startup = _bool_env("AUTO_INGEST_RUN_ON_STARTUP", "true")
-    auto_extract_enabled = _bool_env("AUTO_EXTRACT_ENABLED", "true")
-    auto_ai_enabled = _bool_env("AUTO_AI_QUEUE_ENABLED", "true")
+    default_extract_enabled = _bool_env("AUTO_EXTRACT_ENABLED", "true")
+    default_ai_enabled = _bool_env("AUTO_AI_QUEUE_ENABLED", "true")
 
     print(
         "[SignalDash ingest workflow] starting "
-        f"enabled={enabled} "
+        f"env_auto_ingest_enabled={default_ingest_enabled} "
         f"interval_seconds={interval_seconds} "
         f"ai_interval_seconds={ai_interval_seconds} "
         f"run_on_startup={run_on_startup} "
-        f"auto_extract_enabled={auto_extract_enabled} "
-        f"auto_ai_enabled={auto_ai_enabled}",
+        f"env_auto_extract_enabled={default_extract_enabled} "
+        f"env_auto_ai_enabled={default_ai_enabled}",
         flush=True,
     )
-
-    if not enabled:
-        print("[SignalDash ingest workflow] disabled by AUTO_INGEST_ENABLED", flush=True)
-        while True:
-            time.sleep(3600)
 
     last_ai_run = 0
 
     if run_on_startup:
         try:
-            should_queue_ai = auto_ai_enabled
-            run_workflow(queue_ai=should_queue_ai, auto_extract=auto_extract_enabled)
+            controls = _runtime_controls(default_ingest_enabled, default_extract_enabled, default_ai_enabled)
+            should_queue_ai = controls["auto_ai"]
+            run_workflow(
+                queue_ai=should_queue_ai,
+                auto_ingest=controls["auto_ingest"],
+                auto_extract=controls["auto_extract"],
+            )
             if should_queue_ai:
                 last_ai_run = time.time()
         except Exception as exc:
@@ -374,8 +429,14 @@ def main():
 
         try:
             now = time.time()
-            should_queue_ai = auto_ai_enabled and (now - last_ai_run >= ai_interval_seconds)
-            run_workflow(queue_ai=should_queue_ai, auto_extract=auto_extract_enabled)
+            controls = _runtime_controls(default_ingest_enabled, default_extract_enabled, default_ai_enabled)
+            should_queue_ai = controls["auto_ai"] and (now - last_ai_run >= ai_interval_seconds)
+
+            run_workflow(
+                queue_ai=should_queue_ai,
+                auto_ingest=controls["auto_ingest"],
+                auto_extract=controls["auto_extract"],
+            )
 
             if should_queue_ai:
                 last_ai_run = now
