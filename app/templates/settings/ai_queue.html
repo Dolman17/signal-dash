@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block title %}AI Queue · SignalDesk{% endblock %}
+{% block page_title %}AI Queue Monitor{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-3">
+    <div class="space-y-6 xl:col-span-2">
+        <div class="glass-panel rounded-3xl p-6">
+            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-white">AI Queue Monitor</h2>
+                    <p class="mt-2 text-sm leading-6 text-slate-400">
+                        Live Redis/RQ queue view for local AI reviews, daily briefings, cloud AI, ingest jobs and default background work.
+                    </p>
+                </div>
+
+                <div class="flex flex-wrap gap-3">
+                    <a href="{{ url_for('settings.ai_queue') }}"
+                       class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+                        Refresh
+                    </a>
+
+                    <a href="{{ url_for('settings.index') }}"
+                       class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700">
+                        Settings
+                    </a>
+                </div>
+            </div>
+
+            <div class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+                <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
+                    <div class="text-xs uppercase tracking-wider text-amber-100/60">Queued</div>
+                    <div class="mt-2 text-2xl font-bold text-amber-100">{{ queue_overview.total_counts.queued }}</div>
+                </div>
+
+                <div class="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-4">
+                    <div class="text-xs uppercase tracking-wider text-sky-100/60">Started</div>
+                    <div class="mt-2 text-2xl font-bold text-sky-100">{{ queue_overview.total_counts.started }}</div>
+                </div>
+
+                <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-4">
+                    <div class="text-xs uppercase tracking-wider text-red-100/60">Failed</div>
+                    <div class="mt-2 text-2xl font-bold text-red-100">{{ queue_overview.total_counts.failed }}</div>
+                </div>
+
+                <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                    <div class="text-xs uppercase tracking-wider text-emerald-100/60">Finished</div>
+                    <div class="mt-2 text-2xl font-bold text-emerald-100">{{ queue_overview.total_counts.finished }}</div>
+                </div>
+
+                <div class="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4">
+                    <div class="text-xs uppercase tracking-wider text-violet-100/60">Deferred</div>
+                    <div class="mt-2 text-2xl font-bold text-violet-100">{{ queue_overview.total_counts.deferred }}</div>
+                </div>
+
+                <div class="rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
+                    <div class="text-xs uppercase tracking-wider text-slate-500">Scheduled</div>
+                    <div class="mt-2 text-2xl font-bold text-white">{{ queue_overview.total_counts.scheduled }}</div>
+                </div>
+            </div>
+
+            {% if queue_overview.error %}
+                <div class="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 p-5">
+                    <h3 class="text-sm font-semibold text-red-100">Queue check failed</h3>
+                    <p class="mt-2 break-all text-sm leading-6 text-red-100/80">{{ queue_overview.error }}</p>
+                </div>
+            {% endif %}
+        </div>
+
+        {% for queue in queue_overview.queues %}
+            <div class="glass-panel rounded-3xl p-6">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">{{ queue.name }}</h3>
+                        <p class="mt-1 text-sm text-slate-400">
+                            Queue status and recent jobs.
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <span class="status-pill bg-amber-400/10 text-amber-300">Queued {{ queue.counts.queued }}</span>
+                        <span class="status-pill bg-sky-400/10 text-sky-300">Started {{ queue.counts.started }}</span>
+                        <span class="status-pill bg-red-400/10 text-red-300">Failed {{ queue.counts.failed }}</span>
+                        <span class="status-pill bg-emerald-400/10 text-emerald-300">Finished {{ queue.counts.finished }}</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 grid gap-5">
+                    <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-amber-100">Queued Jobs</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for job in queue.queued_jobs %}
+                                {% include "settings/_queue_job_card.html" %}
+                            {% else %}
+                                <p class="text-sm text-amber-100/70">No queued jobs.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-sky-100">Started Jobs</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for job in queue.started_jobs %}
+                                {% include "settings/_queue_job_card.html" %}
+                            {% else %}
+                                <p class="text-sm text-sky-100/70">No running jobs.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-red-100">Failed Jobs</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for job in queue.failed_jobs %}
+                                {% include "settings/_queue_job_card.html" %}
+                            {% else %}
+                                <p class="text-sm text-red-100/70">No failed jobs.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <details class="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                        <summary class="cursor-pointer text-sm font-semibold text-white">
+                            Finished / Deferred / Scheduled
+                        </summary>
+
+                        <div class="mt-5 grid gap-5">
+                            <div>
+                                <h4 class="text-sm font-semibold text-emerald-100">Finished Jobs</h4>
+                                <div class="mt-3 space-y-3">
+                                    {% for job in queue.finished_jobs %}
+                                        {% include "settings/_queue_job_card.html" %}
+                                    {% else %}
+                                        <p class="text-sm text-slate-500">No finished jobs retained.</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 class="text-sm font-semibold text-violet-100">Deferred Jobs</h4>
+                                <div class="mt-3 space-y-3">
+                                    {% for job in queue.deferred_jobs %}
+                                        {% include "settings/_queue_job_card.html" %}
+                                    {% else %}
+                                        <p class="text-sm text-slate-500">No deferred jobs.</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 class="text-sm font-semibold text-slate-200">Scheduled Jobs</h4>
+                                <div class="mt-3 space-y-3">
+                                    {% for job in queue.scheduled_jobs %}
+                                        {% include "settings/_queue_job_card.html" %}
+                                    {% else %}
+                                        <p class="text-sm text-slate-500">No scheduled jobs.</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="space-y-6">
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">Redis Status</h3>
+
+            <div class="mt-4 rounded-2xl border {% if queue_overview.redis_status.ok %}border-emerald-400/20 bg-emerald-400/10{% else %}border-red-400/20 bg-red-400/10{% endif %} p-4">
+                {% if queue_overview.redis_status.ok %}
+                    <div class="text-sm font-semibold text-emerald-100">Connected</div>
+                {% else %}
+                    <div class="text-sm font-semibold text-red-100">Issue</div>
+                {% endif %}
+
+                <p class="mt-2 break-all text-xs leading-5 {% if queue_overview.redis_status.ok %}text-emerald-100/70{% else %}text-red-100/80{% endif %}">
+                    {{ queue_overview.redis_status.url }}
+                </p>
+
+                <p class="mt-2 text-xs leading-5 {% if queue_overview.redis_status.ok %}text-emerald-100/70{% else %}text-red-100/80{% endif %}">
+                    {{ queue_overview.redis_status.message }}
+                </p>
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">Queue Names</h3>
+
+            <div class="mt-4 space-y-3">
+                {% for name in queue_names %}
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                        <div class="font-mono text-sm text-slate-200">{{ name }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">Server Check</h3>
+            <div class="mt-3 space-y-3 text-sm leading-6 text-slate-400">
+                <p>
+                    The worker should show as running in Docker:
+                </p>
+                <pre class="overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">docker compose ps
+docker compose logs -f signaldash-worker</pre>
+                <p>
+                    If jobs remain queued but never start, the worker is stopped or cannot reach Redis.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

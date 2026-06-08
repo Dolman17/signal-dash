@@ -20,6 +20,12 @@
                        class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700">
                         Dashboard
                     </a>
+
+                    <a href="{{ url_for('settings.ai_queue') }}"
+                       class="rounded-xl bg-violet-500 px-4 py-2 text-sm font-bold text-white hover:bg-violet-400">
+                        AI Queue
+                    </a>
+
                     <a href="{{ url_for('briefings.daily') }}"
                        class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
                         Daily Briefing
@@ -70,6 +76,13 @@
                     <p class="mt-2 text-xs leading-5 {% if redis_status.ok %}text-emerald-100/70{% else %}text-red-100/80{% endif %}">
                         {{ redis_status.message }}
                     </p>
+
+                    <div class="mt-4">
+                        <a href="{{ url_for('settings.ai_queue') }}"
+                           class="text-sm font-semibold {% if redis_status.ok %}text-emerald-200 hover:text-emerald-100{% else %}text-red-200 hover:text-red-100{% endif %}">
+                            View queue monitor →
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
