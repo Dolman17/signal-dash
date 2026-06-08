@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Executive Narrative · SignalDesk{% endblock %}
+{% block page_title %}Executive Narrative Builder{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="glass-panel rounded-3xl p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <a href="{{ url_for('due_diligence.index') }}" class="text-sm font-semibold text-cyan-300 hover:text-cyan-100">← Due diligence library</a>
+                <h2 class="mt-3 text-xl font-semibold text-white">Executive Narrative Builder</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    A structured, evidence-led management narrative for board updates, PE readiness, adviser conversations and future VDD preparation.
+                </p>
+            </div>
+            <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 text-center">
+                <div class="text-xs uppercase tracking-wider text-cyan-100/60">Score</div>
+                <div class="mt-2 text-3xl font-bold text-cyan-100">{{ library.totals.overall_score }}%</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6">
+        <h3 class="text-lg font-semibold text-white">Headline</h3>
+        <p class="mt-3 text-sm leading-7 text-slate-300">{{ narrative.headline }}</p>
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-2">
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-lg font-semibold text-white">What Has Improved / Is Supportable</h3>
+            <div class="mt-4 space-y-3">
+                {% for item in narrative.what_has_improved %}
+                    <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-50/90">{{ item }}</div>
+                {% else %}
+                    <p class="text-sm text-slate-500">No strong or adequate categories identified yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-lg font-semibold text-white">Risk Control / Watch Points</h3>
+            <div class="mt-4 space-y-3">
+                {% for item in narrative.risk_control %}
+                    <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm leading-6 text-red-50/90">{{ item }}</div>
+                {% else %}
+                    <p class="text-sm text-slate-500">No risk control watch points identified yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6">
+        <h3 class="text-lg font-semibold text-white">Buyer Story</h3>
+        <div class="mt-4 space-y-3">
+            {% for item in narrative.buyer_story %}
+                <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm leading-6 text-cyan-50/90">{{ item }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6">
+        <h3 class="text-lg font-semibold text-white">Recommended Next Focus</h3>
+        <div class="mt-4 space-y-3">
+            {% for item in narrative.next_focus %}
+                <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm leading-6 text-amber-50/90">{{ item }}</div>
+            {% else %}
+                <p class="text-sm text-slate-500">No priority next-focus items generated yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
