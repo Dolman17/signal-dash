@@ -1,0 +1,76 @@
+services:
+  signaldash-db:
+    image: postgres:16-alpine
+    container_name: signaldash-db
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-signaldash}
+      POSTGRES_USER: ${POSTGRES_USER:-signaldash}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-signaldash}
+    volumes:
+      - signaldash_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-signaldash} -d ${POSTGRES_DB:-signaldash}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  signaldash-redis:
+    image: redis:7-alpine
+    container_name: signaldash-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - signaldash_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  signaldash-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signaldash-web
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    depends_on:
+      signaldash-db:
+        condition: service_healthy
+      signaldash-redis:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    volumes:
+      - /srv/signaldash/storage:/srv/signaldash/storage
+      - /srv/signaldash/ingest:/srv/signaldash/ingest
+      - /srv/signaldash/backups:/srv/signaldash/backups
+      - /srv/signaldash/logs:/srv/signaldash/logs
+
+  signaldash-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: signaldash-worker
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    depends_on:
+      signaldash-db:
+        condition: service_healthy
+      signaldash-redis:
+        condition: service_healthy
+    command: ["python", "worker.py"]
+    volumes:
+      - /srv/signaldash/storage:/srv/signaldash/storage
+      - /srv/signaldash/ingest:/srv/signaldash/ingest
+      - /srv/signaldash/backups:/srv/signaldash/backups
+      - /srv/signaldash/logs:/srv/signaldash/logs
+
+volumes:
+  signaldash_postgres_data:
+  signaldash_redis_data:
