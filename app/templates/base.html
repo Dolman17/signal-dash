@@ -117,6 +117,13 @@
                        class="nav-link {% if request.endpoint and request.endpoint.startswith('briefings.') %}nav-link-active{% endif %}">
                         <span>Daily Briefing</span>
                     </a>
+
+                    <div class="my-3 border-t border-slate-800"></div>
+
+                    <a href="{{ url_for('settings.index') }}"
+                       class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') %}nav-link-active{% endif %}">
+                        <span>Settings</span>
+                    </a>
                 </nav>
 
                 <div class="border-t border-slate-800/80 p-4">
