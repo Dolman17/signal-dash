@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Buyer Questions · SignalDesk{% endblock %}
+{% block page_title %}Buyer Question Generator{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="glass-panel rounded-3xl p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <a href="{{ url_for('due_diligence.index') }}" class="text-sm font-semibold text-cyan-300 hover:text-cyan-100">← Due diligence library</a>
+                <h2 class="mt-3 text-xl font-semibold text-white">Buyer Question Generator</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    Likely buyer, investor and adviser questions generated from the current evidence base and evidence gaps.
+                </p>
+            </div>
+            <div class="rounded-2xl border border-violet-400/20 bg-violet-400/10 px-5 py-4 text-center">
+                <div class="text-xs uppercase tracking-wider text-violet-100/60">Questions</div>
+                <div class="mt-2 text-3xl font-bold text-violet-100">{{ questions|length }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-5">
+        {% for item in questions %}
+            <div class="glass-panel rounded-3xl p-5">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <a href="{{ url_for('due_diligence.category', slug=item.category_slug) }}" class="text-xs font-semibold uppercase tracking-wider text-cyan-300 hover:text-cyan-100">{{ item.category }}</a>
+                        <h3 class="mt-2 text-lg font-semibold text-white">{{ item.question }}</h3>
+                        <p class="mt-3 text-sm leading-6 text-slate-400">{{ item.recommended_angle }}</p>
+                    </div>
+                    <div class="grid w-full grid-cols-3 gap-2 text-center md:w-72">
+                        <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><div class="text-xs text-slate-500">Evidence</div><div class="mt-1 font-semibold text-white">{{ item.evidence_count }}</div></div>
+                        <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><div class="text-xs text-slate-500">Risks</div><div class="mt-1 font-semibold text-white">{{ item.risk_count }}</div></div>
+                        <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3"><div class="text-xs text-slate-500">Gaps</div><div class="mt-1 font-semibold text-white">{{ item.gap_count }}</div></div>
+                    </div>
+                </div>
+
+                {% if item.source_file_id %}
+                    <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                        <span class="text-sm text-slate-400">Linked source:</span>
+                        <a href="{{ url_for('documents.detail', document_id=item.source_file_id) }}" class="ml-2 text-sm font-semibold text-cyan-300 hover:text-cyan-100">SourceFile {{ item.source_file_id }}</a>
+                    </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="glass-panel rounded-3xl p-8 text-center">
+                <h3 class="text-lg font-semibold text-white">No questions generated yet</h3>
+                <p class="mt-2 text-sm text-slate-400">Upload, extract and review more source evidence to generate stronger buyer questions.</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
