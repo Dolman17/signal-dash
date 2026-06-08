@@ -35,6 +35,7 @@ def create_app(config_class=Config):
     from app.insights.routes import insights_bp
     from app.briefings.routes import briefings_bp
     from app.settings.routes import settings_bp
+    from app.ingest.routes import ingest_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -45,6 +46,7 @@ def create_app(config_class=Config):
     app.register_blueprint(insights_bp)
     app.register_blueprint(briefings_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(ingest_bp)
 
     @app.route("/")
     def index():

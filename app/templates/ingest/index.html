@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Folder Ingest · SignalDesk{% endblock %}
+{% block page_title %}Folder Ingest{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-3">
+    <div class="glass-panel rounded-3xl p-6 xl:col-span-2">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-white">Ingest Folder</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-400">
+                    Drop files into the server ingest folder, then scan them into SignalDesk.
+                    Files are copied into managed storage and registered as source documents.
+                </p>
+            </div>
+
+            <form method="post" action="{{ url_for('ingest.scan') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+                    Scan Ingest Folder
+                </button>
+            </form>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
+            <h3 class="text-sm font-semibold text-cyan-100">Folder location</h3>
+            <p class="mt-2 break-all font-mono text-sm text-cyan-50/90">{{ ingest_root }}</p>
+        </div>
+
+        <div class="mt-6 overflow-hidden rounded-2xl border border-slate-800">
+            <table class="min-w-full divide-y divide-slate-800">
+                <thead class="bg-slate-950/70">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">File</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Type</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Size</th>
+                    </tr>
+                </thead>
+
+                <tbody class="divide-y divide-slate-800 bg-slate-950/30">
+                    {% for file in pending_files %}
+                        <tr>
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-white">{{ file.name }}</div>
+                                <div class="mt-1 text-xs text-slate-500">{{ file.relative_path }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-300">{{ file.suffix or "Unknown" }}</td>
+                            <td class="px-4 py-3 text-sm text-slate-300">{{ file.size }} bytes</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="3" class="px-4 py-10 text-center text-sm text-slate-500">
+                                No files waiting in the ingest folder.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+            <h3 class="text-sm font-semibold text-white">What happens after scan?</h3>
+
+            <div class="mt-4 grid gap-3 md:grid-cols-2">
+                <div class="rounded-xl bg-slate-900 p-4">
+                    <div class="text-sm font-semibold text-emerald-300">Valid new files</div>
+                    <p class="mt-2 text-xs leading-5 text-slate-400">
+                        Copied to managed storage and moved to <span class="font-mono text-slate-300">_processed</span>.
+                    </p>
+                </div>
+
+                <div class="rounded-xl bg-slate-900 p-4">
+                    <div class="text-sm font-semibold text-sky-300">Duplicates</div>
+                    <p class="mt-2 text-xs leading-5 text-slate-400">
+                        Detected by hash and size, then moved to <span class="font-mono text-slate-300">_duplicates</span>.
+                    </p>
+                </div>
+
+                <div class="rounded-xl bg-slate-900 p-4">
+                    <div class="text-sm font-semibold text-amber-300">Unsupported files</div>
+                    <p class="mt-2 text-xs leading-5 text-slate-400">
+                        Moved to <span class="font-mono text-slate-300">_rejected</span>.
+                    </p>
+                </div>
+
+                <div class="rounded-xl bg-slate-900 p-4">
+                    <div class="text-sm font-semibold text-red-300">Failed files</div>
+                    <p class="mt-2 text-xs leading-5 text-slate-400">
+                        Moved to <span class="font-mono text-slate-300">_failed</span> for manual review.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-6">
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">Server command</h3>
+            <p class="mt-3 text-sm leading-6 text-slate-400">
+                To add files from the server, copy them here:
+            </p>
+
+            <pre class="mt-4 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs leading-5 text-slate-300">/srv/signaldash/ingest</pre>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">Recommended flow</h3>
+
+            <ol class="mt-4 space-y-3 text-sm leading-6 text-slate-400">
+                <li>1. Drop files into the ingest folder.</li>
+                <li>2. Click Scan Ingest Folder.</li>
+                <li>3. Open Documents.</li>
+                <li>4. Process documents.</li>
+                <li>5. Run local AI review.</li>
+                <li>6. Create actions, risks and insights.</li>
+            </ol>
+
+            <div class="mt-5 flex flex-wrap gap-3">
+                <a href="{{ url_for('documents.index') }}"
+                   class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700">
+                    Documents
+                </a>
+
+                <a href="{{ url_for('settings.index') }}"
+                   class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700">
+                    Settings
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -96,6 +96,11 @@
                         <span>Documents</span>
                     </a>
 
+                    <a href="{{ url_for('ingest.index') }}"
+                       class="nav-link {% if request.endpoint and request.endpoint.startswith('ingest.') %}nav-link-active{% endif %}">
+                        <span>Folder Ingest</span>
+                    </a>
+
                     <div class="my-3 border-t border-slate-800"></div>
 
                     <a href="{{ url_for('insights.index') }}"
