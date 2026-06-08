@@ -271,7 +271,7 @@ def queue_local_ai_batch(limit=5):
     }
 
 
-def run_workflow(queue_ai=False):
+def run_workflow(queue_ai=False, auto_extract=True):
     app = create_app()
 
     with app.app_context():
@@ -281,8 +281,16 @@ def run_workflow(queue_ai=False):
             move_after_ingest=True,
         )
 
-        extraction_limit = max(1, _int_env("AUTO_EXTRACT_BATCH_SIZE", 10))
-        extraction_result = process_uploaded_documents(limit=extraction_limit)
+        if auto_extract:
+            extraction_limit = max(1, _int_env("AUTO_EXTRACT_BATCH_SIZE", 10))
+            extraction_result = process_uploaded_documents(limit=extraction_limit)
+        else:
+            extraction_result = {
+                "processed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "disabled": True,
+            }
 
         cleanup_result = cleanup_email_image_attachments()
 
@@ -309,6 +317,7 @@ def run_workflow(queue_ai=False):
             f"ingest_failed={ingest_result.get('failed', 0)} "
             f"extracted={extraction_result.get('processed', 0)} "
             f"extract_failed={extraction_result.get('failed', 0)} "
+            f"auto_extract_disabled={extraction_result.get('disabled', False)} "
             f"images_deleted={cleanup_result.get('deleted', 0)} "
             f"image_delete_failed={cleanup_result.get('failed', 0)} "
             f"ai_batch_ran={ai_result.get('ran', False)} "
@@ -354,7 +363,7 @@ def main():
     if run_on_startup:
         try:
             should_queue_ai = auto_ai_enabled
-            run_workflow(queue_ai=should_queue_ai)
+            run_workflow(queue_ai=should_queue_ai, auto_extract=auto_extract_enabled)
             if should_queue_ai:
                 last_ai_run = time.time()
         except Exception as exc:
@@ -366,7 +375,7 @@ def main():
         try:
             now = time.time()
             should_queue_ai = auto_ai_enabled and (now - last_ai_run >= ai_interval_seconds)
-            run_workflow(queue_ai=should_queue_ai)
+            run_workflow(queue_ai=should_queue_ai, auto_extract=auto_extract_enabled)
 
             if should_queue_ai:
                 last_ai_run = now
