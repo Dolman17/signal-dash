@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Tasks · SignalDesk{% endblock %}
+{% block page_title %}Task Tracker{% endblock %}
+{% block content %}
+<div class="glass-panel rounded-3xl p-6">
+  <h2 class="text-lg font-semibold">Tasks</h2>
+  <div class="mt-6 space-y-3">
+    {% for action in actions %}
+      <a href="{{ url_for('actions.detail', action_id=action.id) }}" class="block rounded-2xl border border-slate-800 bg-slate-950/60 p-4 hover:bg-slate-900">
+        <div class="font-semibold text-white">{{ action.title }}</div>
+        <div class="mt-2 text-xs text-slate-500">{{ action.owner or 'Unknown' }} · {{ action.priority or 'Unknown' }} · {{ action.status }}</div>
+      </a>
+    {% else %}
+      <p class="text-sm text-slate-500">No records created yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
