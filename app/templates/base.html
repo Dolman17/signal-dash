@@ -112,6 +112,11 @@
                        class="nav-link {% if request.endpoint and request.endpoint.startswith('actions.') %}nav-link-active{% endif %}">
                         <span>Actions</span>
                     </a>
+
+                    <a href="{{ url_for('briefings.daily') }}"
+                       class="nav-link {% if request.endpoint and request.endpoint.startswith('briefings.') %}nav-link-active{% endif %}">
+                        <span>Daily Briefing</span>
+                    </a>
                 </nav>
 
                 <div class="border-t border-slate-800/80 p-4">

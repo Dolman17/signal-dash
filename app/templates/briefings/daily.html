@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Daily Briefing · SignalDesk{% endblock %}
+{% block page_title %}Daily Briefing{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-3">
+    <div class="glass-panel rounded-3xl p-6 xl:col-span-2">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-white">Daily Executive Briefing</h2>
+                <p class="mt-2 text-sm text-slate-400">
+                    Generated from stored documents, AI analysis, open insights, risks and actions.
+                </p>
+            </div>
+
+            <form method="post" action="{{ url_for('briefings.generate_daily') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+                    Generate Today
+                </button>
+            </form>
+        </div>
+
+        {% if latest %}
+            <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">{{ latest.title }}</h3>
+                        <p class="mt-1 text-xs text-slate-500">
+                            {{ latest.briefing_date.strftime("%d %b %Y") }}
+                            · {{ latest.provider or "Unknown provider" }}
+                            · {{ latest.model_name or "Unknown model" }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
+                    <h4 class="text-sm font-semibold text-cyan-100">Executive Summary</h4>
+                    <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-cyan-50/90">
+{{ latest.executive_summary or "No executive summary generated." }}
+                    </p>
+                </div>
+
+                <div class="mt-5 grid gap-5 xl:grid-cols-2">
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                        <h4 class="text-sm font-semibold text-white">Highlights</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for item in latest.highlights_json or [] %}
+                                <div class="rounded-xl bg-slate-900 p-3">
+                                    <div class="text-sm font-semibold text-white">{{ item.get("title", "Untitled highlight") }}</div>
+                                    <p class="mt-2 text-sm leading-6 text-slate-300">{{ item.get("summary", "") }}</p>
+                                    {% if item.get("why_it_matters") %}
+                                        <p class="mt-2 text-xs leading-5 text-slate-500">Why it matters: {{ item.get("why_it_matters") }}</p>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <p class="text-sm text-slate-500">No highlights generated.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-red-100">Risks / Watch Points</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for item in latest.risks_json or [] %}
+                                <div class="rounded-xl bg-slate-950/70 p-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="text-sm font-semibold text-red-100">{{ item.get("title", "Untitled risk") }}</div>
+                                        <span class="rounded-full bg-red-400/10 px-2 py-1 text-xs text-red-200">{{ item.get("severity", "Unknown") }}</span>
+                                    </div>
+                                    <p class="mt-2 text-sm leading-6 text-red-100/80">{{ item.get("summary", "") }}</p>
+                                    {% if item.get("recommended_action") %}
+                                        <p class="mt-2 text-xs leading-5 text-red-100/70">Action: {{ item.get("recommended_action") }}</p>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <p class="text-sm text-red-100/70">No risks generated.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 grid gap-5 xl:grid-cols-2">
+                    <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-emerald-100">Opportunities</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for item in latest.opportunities_json or [] %}
+                                <div class="rounded-xl bg-slate-950/70 p-3">
+                                    <div class="text-sm font-semibold text-emerald-100">{{ item.get("title", "Untitled opportunity") }}</div>
+                                    <p class="mt-2 text-sm leading-6 text-emerald-100/80">{{ item.get("summary", "") }}</p>
+                                </div>
+                            {% else %}
+                                <p class="text-sm text-emerald-100/70">No opportunities generated.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-amber-100">Actions</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for item in latest.actions_json or [] %}
+                                <div class="rounded-xl bg-slate-950/70 p-3">
+                                    <div class="text-sm font-semibold text-amber-100">{{ item.get("title", "Untitled action") }}</div>
+                                    <p class="mt-2 text-xs text-amber-100/70">
+                                        Owner: {{ item.get("owner", "Unknown") }}
+                                        · Priority: {{ item.get("priority", "Unknown") }}
+                                    </p>
+                                    {% if item.get("suggested_next_step") %}
+                                        <p class="mt-2 text-sm leading-6 text-amber-100/80">{{ item.get("suggested_next_step") }}</p>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <p class="text-sm text-amber-100/70">No actions generated.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-5 rounded-2xl border border-violet-400/20 bg-violet-400/10 p-5">
+                    <h4 class="text-sm font-semibold text-violet-100">Exit Readiness</h4>
+
+                    {% set exit = latest.exit_readiness_json or {} %}
+                    <p class="mt-3 text-sm leading-6 text-violet-100/80">
+                        {{ exit.get("summary", "No exit-readiness summary generated.") }}
+                    </p>
+
+                    {% if exit.get("watch_points") %}
+                        <div class="mt-4">
+                            <div class="text-xs font-semibold uppercase tracking-wider text-violet-100/60">Watch points</div>
+                            <ul class="mt-2 space-y-2 text-sm text-violet-50">
+                                {% for item in exit.get("watch_points") %}
+                                    <li class="rounded-xl bg-slate-950/70 p-3">{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if exit.get("evidence_gaps") %}
+                        <div class="mt-4">
+                            <div class="text-xs font-semibold uppercase tracking-wider text-violet-100/60">Evidence gaps</div>
+                            <ul class="mt-2 space-y-2 text-sm text-violet-50">
+                                {% for item in exit.get("evidence_gaps") %}
+                                    <li class="rounded-xl bg-slate-950/70 p-3">{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    {% if exit.get("buyer_questions") %}
+                        <div class="mt-4">
+                            <div class="text-xs font-semibold uppercase tracking-wider text-violet-100/60">Buyer questions</div>
+                            <ul class="mt-2 space-y-2 text-sm text-violet-50">
+                                {% for item in exit.get("buyer_questions") %}
+                                    <li class="rounded-xl bg-slate-950/70 p-3">{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if latest.source_file_ids_json %}
+                    <div class="mt-5 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                        <h4 class="text-sm font-semibold text-white">Source document IDs</h4>
+                        <p class="mt-2 text-xs leading-5 text-slate-500">
+                            {{ latest.source_file_ids_json|join(", ") }}
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-8 text-center">
+                <h3 class="text-lg font-semibold text-white">No briefing yet</h3>
+                <p class="mt-2 text-sm text-slate-400">
+                    Click Generate Today to create the first daily briefing from your current records.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6">
+        <h3 class="text-sm font-semibold text-white">Recent Briefings</h3>
+
+        <div class="mt-4 space-y-3">
+            {% for briefing in briefings %}
+                <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                    <div class="text-sm font-semibold text-white">{{ briefing.title }}</div>
+                    <div class="mt-1 text-xs text-slate-500">
+                        {{ briefing.briefing_date.strftime("%d %b %Y") }}
+                        · {{ briefing.provider or "Unknown" }}
+                    </div>
+                </div>
+            {% else %}
+                <p class="text-sm text-slate-500">No stored briefings yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

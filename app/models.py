@@ -449,3 +449,37 @@ class AuditLog(db.Model):
     details = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class DailyBriefing(db.Model):
+    __tablename__ = "daily_briefings"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    briefing_date = db.Column(db.Date, nullable=False, index=True)
+    title = db.Column(db.String(300), nullable=False)
+
+    executive_summary = db.Column(db.Text, nullable=True)
+
+    highlights_json = db.Column(db.JSON, nullable=True)
+    risks_json = db.Column(db.JSON, nullable=True)
+    opportunities_json = db.Column(db.JSON, nullable=True)
+    actions_json = db.Column(db.JSON, nullable=True)
+    exit_readiness_json = db.Column(db.JSON, nullable=True)
+
+    source_file_ids_json = db.Column(db.JSON, nullable=True)
+
+    provider = db.Column(db.String(80), nullable=True)
+    model_name = db.Column(db.String(160), nullable=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("briefing_date", name="uq_daily_briefing_date"),
+    )
