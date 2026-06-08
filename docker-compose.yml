@@ -95,6 +95,11 @@ services:
       AUTO_INGEST_ENABLED: "true"
       AUTO_INGEST_INTERVAL_SECONDS: "900"
       AUTO_INGEST_RUN_ON_STARTUP: "true"
+      AUTO_EXTRACT_ENABLED: "true"
+      AUTO_EXTRACT_BATCH_SIZE: "10"
+      AUTO_AI_QUEUE_ENABLED: "true"
+      AUTO_AI_INTERVAL_SECONDS: "1800"
+      AUTO_AI_BATCH_SIZE: "5"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
