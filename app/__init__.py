@@ -1,3 +1,4 @@
+import click
 from flask import Flask, redirect, url_for
 from flask_login import current_user
 
@@ -54,5 +55,26 @@ def create_app(config_class=Config):
         if current_user.is_authenticated:
             return redirect(url_for("dashboard.index"))
         return redirect(url_for("auth.login"))
+
+    @app.cli.command("create-admin")
+    @click.option("--username", prompt=True)
+    @click.option("--email", prompt=True)
+    @click.option("--admin-password", prompt=True)
+    def create_admin(username, email, admin_password):
+        existing = User.query.filter(
+            (User.username == username) | (User.email == email)
+        ).first()
+
+        if existing:
+            click.echo("A user with that username or email already exists.")
+            return
+
+        user = User(username=username, email=email, is_admin=True)
+        user.set_password(admin_password)
+
+        db.session.add(user)
+        db.session.commit()
+
+        click.echo(f"Admin user created: {username}")
 
     return app
