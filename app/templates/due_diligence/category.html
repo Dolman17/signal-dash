@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}{{ category.name }} · Due Diligence{% endblock %}
+{% block page_title %}{{ category.name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="glass-panel rounded-3xl p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <a href="{{ url_for('due_diligence.index') }}" class="text-sm font-semibold text-cyan-300 hover:text-cyan-100">← Due diligence library</a>
+                <h2 class="mt-3 text-xl font-semibold text-white">{{ category.name }}</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{{ category.reason }}</p>
+            </div>
+            <div class="flex flex-col items-start gap-3 md:items-end">
+                {% set status = category.status %}
+                {% include "due_diligence/_status_pill.html" %}
+                <div class="text-2xl font-bold text-white">{{ category.score }}%</div>
+            </div>
+        </div>
+
+        <div class="mt-6 grid gap-4 md:grid-cols-6">
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Documents</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.documents }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">AI Analyses</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.analyses }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Risks</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.risks }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">High Risks</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.high_risks }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Actions</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.actions }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Open Actions</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.open_actions }}</div></div>
+        </div>
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-3">
+        <div class="space-y-6 xl:col-span-2">
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold text-white">Linked Documents</h3>
+                <div class="mt-4 space-y-3">
+                    {% for document in category.documents %}
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                            <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                    <div class="text-sm font-semibold text-white">{{ document.title }}</div>
+                                    <div class="mt-1 text-xs text-slate-500">SourceFile {{ document.id }} · {{ document.status }}{% if document.business_area %} · {{ document.business_area }}{% endif %}</div>
+                                </div>
+                                <a href="{{ url_for('documents.detail', document_id=document.id) }}" class="text-xs font-semibold text-cyan-300 hover:text-cyan-100">Open →</a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No documents linked yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold text-white">AI Analysis Evidence</h3>
+                <div class="mt-4 space-y-3">
+                    {% for analysis in category.analyses %}
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                            <div class="text-sm font-semibold text-white">{{ analysis.title }}</div>
+                            <p class="mt-2 text-sm leading-6 text-slate-400">{{ analysis.summary or "No summary recorded." }}</p>
+                            <div class="mt-2 text-xs text-slate-500">Evidence: {{ analysis.evidence_strength or "Unknown" }}{% if analysis.confidence_score %} · Confidence {{ analysis.confidence_score }}{% endif %}</div>
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No AI analysis linked yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold text-white">Risks, Actions & Insights</h3>
+                <div class="mt-4 grid gap-5 xl:grid-cols-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-red-100">Risks</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for risk in category.risks %}
+                                <a href="{{ url_for('risks.detail', risk_id=risk.id) }}" class="block rounded-xl border border-red-400/10 bg-red-400/5 p-3 hover:bg-red-400/10">
+                                    <div class="text-sm font-semibold text-white">{{ risk.title }}</div>
+                                    <div class="mt-1 text-xs text-red-200/70">{{ risk.severity or "Unknown severity" }}</div>
+                                </a>
+                            {% else %}<p class="text-sm text-slate-500">No risks.</p>{% endfor %}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-semibold text-amber-100">Actions</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for action in category.actions %}
+                                <a href="{{ url_for('actions.detail', action_id=action.id) }}" class="block rounded-xl border border-amber-400/10 bg-amber-400/5 p-3 hover:bg-amber-400/10">
+                                    <div class="text-sm font-semibold text-white">{{ action.title }}</div>
+                                    <div class="mt-1 text-xs text-amber-200/70">{{ action.status or "Open" }}{% if action.owner %} · {{ action.owner }}{% endif %}</div>
+                                </a>
+                            {% else %}<p class="text-sm text-slate-500">No actions.</p>{% endfor %}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-semibold text-cyan-100">Insights</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for insight in category.insights %}
+                                <a href="{{ url_for('insights.detail', insight_id=insight.id) }}" class="block rounded-xl border border-cyan-400/10 bg-cyan-400/5 p-3 hover:bg-cyan-400/10">
+                                    <div class="text-sm font-semibold text-white">{{ insight.title }}</div>
+                                    <div class="mt-1 text-xs text-cyan-200/70">{{ insight.insight_type or "Insight" }}</div>
+                                </a>
+                            {% else %}<p class="text-sm text-slate-500">No insights.</p>{% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-semibold text-white">Missing Evidence</h3>
+                <div class="mt-4 space-y-3">
+                    {% for item in category.missing_evidence %}
+                        <div class="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">{{ item }}</div>
+                    {% else %}
+                        <p class="text-sm text-emerald-300">No expected evidence gaps identified for this category.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-semibold text-white">Buyer Questions</h3>
+                <div class="mt-4 space-y-3">
+                    {% for question in category.buyer_questions %}
+                        <div class="rounded-xl border border-violet-400/20 bg-violet-400/10 p-3">
+                            <div class="text-sm font-semibold text-white">{{ question.title }}</div>
+                            <p class="mt-2 text-xs leading-5 text-violet-100/70">{{ question.recommended_angle }}</p>
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No AI-generated buyer questions linked yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
