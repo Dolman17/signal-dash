@@ -30,7 +30,21 @@ DELETABLE_ATTACHMENT_EXTENSIONS = {
     ".webp",
     ".bmp",
     ".svg",
+    ".ico",
+    ".tif",
+    ".tiff",
 }
+
+AI_COMPLETE_STATUSES = {
+    "local_ai_complete",
+    "records_created",
+}
+
+AI_BUSY_STATUSES = {
+    "local_ai_queued",
+    "local_ai_reviewing",
+}
+
 
 
 def _log(source_file_id, stage, status, message=None):
@@ -45,6 +59,7 @@ def _log(source_file_id, stage, status, message=None):
     db.session.add(entry)
 
 
+
 def _is_deletable_attachment_noise(document):
     file_ext = (document.file_ext or "").lower()
 
@@ -53,6 +68,38 @@ def _is_deletable_attachment_noise(document):
         or file_ext in DELETABLE_ATTACHMENT_EXTENSIONS
         or document.source_type in {"attachment", "email_attachment", "folder_attachment"}
     )
+
+
+
+def _is_email_image_attachment(document):
+    file_ext = (document.file_ext or "").lower()
+
+    return (
+        document.source_type == "email_attachment"
+        and document.parent_file_id is not None
+        and file_ext in DELETABLE_ATTACHMENT_EXTENSIONS
+    )
+
+
+
+def _is_ai_queue_candidate(document):
+    if document.parent_file_id is not None:
+        return False
+
+    if _is_deletable_attachment_noise(document):
+        return False
+
+    if document.processing_status in AI_BUSY_STATUSES or document.processing_status in AI_COMPLETE_STATUSES:
+        return False
+
+    if document.processing_status not in {"extracted", "local_ai_failed"}:
+        return False
+
+    if not document.document_text or not document.document_text.text_preview:
+        return False
+
+    return True
+
 
 
 def _delete_file_if_safe(path_value):
@@ -68,11 +115,140 @@ def _delete_file_if_safe(path_value):
         pass
 
 
+
+def _delete_source_file_and_disk(document):
+    original_filename = document.original_filename
+    storage_path = document.storage_path
+
+    extracted_text_path = None
+    body_html_path = None
+
+    if document.document_text and document.document_text.extracted_text_path:
+        extracted_text_path = document.document_text.extracted_text_path
+
+    if document.email_message and document.email_message.body_html_path:
+        body_html_path = document.email_message.body_html_path
+
+    # Remove AI/document records that have non-cascading foreign keys.
+    DocumentAnalysis.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
+    DocumentChunk.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
+    AIProcessingRun.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
+    InsightEvidence.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
+
+    # Preserve created business records but detach them from this noise file.
+    ActionItem.query.filter_by(source_file_id=document.id).update(
+        {"source_file_id": None},
+        synchronize_session=False,
+    )
+    RiskFlag.query.filter_by(source_file_id=document.id).update(
+        {"source_file_id": None},
+        synchronize_session=False,
+    )
+
+    db.session.delete(document)
+    db.session.flush()
+
+    _delete_file_if_safe(storage_path)
+    _delete_file_if_safe(extracted_text_path)
+    _delete_file_if_safe(body_html_path)
+
+    return original_filename
+
+
+
+def _filter_options():
+    def values_for(column):
+        rows = (
+            db.session.query(column)
+            .filter(column.isnot(None))
+            .distinct()
+            .order_by(column.asc())
+            .all()
+        )
+        return [row[0] for row in rows if row[0]]
+
+    return {
+        "statuses": values_for(SourceFile.processing_status),
+        "file_types": values_for(SourceFile.file_ext),
+        "business_areas": values_for(SourceFile.business_area),
+        "source_types": values_for(SourceFile.source_type),
+    }
+
+
+
+def _apply_document_filters(query):
+    status = request.args.get("status", "").strip()
+    file_type = request.args.get("file_type", "").strip()
+    business_area = request.args.get("business_area", "").strip()
+    source_type = request.args.get("source_type", "").strip()
+    attachment_filter = request.args.get("attachment_filter", "").strip()
+    ai_filter = request.args.get("ai_filter", "").strip()
+
+    if status:
+        query = query.filter(SourceFile.processing_status == status)
+
+    if file_type:
+        query = query.filter(SourceFile.file_ext == file_type)
+
+    if business_area:
+        query = query.filter(SourceFile.business_area == business_area)
+
+    if source_type:
+        query = query.filter(SourceFile.source_type == source_type)
+
+    if attachment_filter == "parents_only":
+        query = query.filter(SourceFile.parent_file_id.is_(None))
+    elif attachment_filter == "attachments_only":
+        query = query.filter(SourceFile.parent_file_id.isnot(None))
+    elif attachment_filter == "email_image_noise":
+        query = query.filter(
+            SourceFile.source_type == "email_attachment",
+            SourceFile.parent_file_id.isnot(None),
+            SourceFile.file_ext.in_(DELETABLE_ATTACHMENT_EXTENSIONS),
+        )
+
+    if ai_filter == "needs_ai":
+        query = query.filter(SourceFile.processing_status.in_(["extracted", "local_ai_failed"]))
+    elif ai_filter == "ai_busy":
+        query = query.filter(SourceFile.processing_status.in_(AI_BUSY_STATUSES))
+    elif ai_filter == "ai_complete":
+        query = query.filter(SourceFile.processing_status.in_(AI_COMPLETE_STATUSES))
+    elif ai_filter == "ai_failed":
+        query = query.filter(SourceFile.processing_status == "local_ai_failed")
+
+    return query
+
+
+
 @documents_bp.route("/")
 @login_required
 def index():
-    documents = SourceFile.query.order_by(SourceFile.created_at.desc()).all()
-    return render_template("documents/index.html", documents=documents)
+    query = SourceFile.query
+    query = _apply_document_filters(query)
+
+    documents = query.order_by(SourceFile.created_at.desc()).limit(500).all()
+
+    email_image_noise_count = (
+        SourceFile.query
+        .filter(
+            SourceFile.source_type == "email_attachment",
+            SourceFile.parent_file_id.isnot(None),
+            SourceFile.file_ext.in_(DELETABLE_ATTACHMENT_EXTENSIONS),
+        )
+        .count()
+    )
+
+    ai_queue_candidate_count = sum(1 for document in documents if _is_ai_queue_candidate(document))
+
+    return render_template(
+        "documents/index.html",
+        documents=documents,
+        filter_options=_filter_options(),
+        active_filters=request.args,
+        email_image_noise_count=email_image_noise_count,
+        ai_queue_candidate_count=ai_queue_candidate_count,
+    )
+
 
 
 @documents_bp.route("/process-all", methods=["POST"])
@@ -107,6 +283,132 @@ def process_all():
     return redirect(url_for("documents.index"))
 
 
+
+@documents_bp.route("/queue-ai-extracted", methods=["POST"])
+@login_required
+def queue_ai_extracted():
+    try:
+        limit = int(request.form.get("limit", 10))
+    except Exception:
+        limit = 10
+
+    limit = max(1, min(limit, 50))
+
+    documents = (
+        SourceFile.query
+        .filter(SourceFile.processing_status.in_(["extracted", "local_ai_failed"]))
+        .filter(SourceFile.parent_file_id.is_(None))
+        .order_by(SourceFile.created_at.asc())
+        .limit(200)
+        .all()
+    )
+
+    queued = 0
+    skipped = 0
+    failed = 0
+
+    for document in documents:
+        if queued >= limit:
+            break
+
+        if not _is_ai_queue_candidate(document):
+            skipped += 1
+            continue
+
+        try:
+            job = enqueue_local_ai_review(document.id)
+            document.processing_status = "local_ai_queued"
+            document.processing_error = None
+
+            _log(
+                document.id,
+                "local_ai_review",
+                "queued",
+                f"Queued local AI review job from bulk action: {job.id}",
+            )
+
+            queued += 1
+        except Exception as exc:
+            failed += 1
+            _log(
+                document.id,
+                "local_ai_review",
+                "failed",
+                f"Bulk queue failed: {exc}",
+            )
+
+    db.session.commit()
+
+    if queued:
+        flash(f"Queued {queued} extracted document(s) for local AI review.", "success")
+
+    if skipped:
+        flash(f"Skipped {skipped} document(s) that were not eligible for AI review.", "info")
+
+    if failed:
+        flash(f"{failed} document(s) could not be queued.", "error")
+
+    if not queued and not skipped and not failed:
+        flash("No extracted documents were eligible for local AI review.", "info")
+
+    return redirect(url_for("documents.index"))
+
+
+
+@documents_bp.route("/cleanup-email-images", methods=["POST"])
+@login_required
+def cleanup_email_images():
+    documents = (
+        SourceFile.query
+        .filter(
+            SourceFile.source_type == "email_attachment",
+            SourceFile.parent_file_id.isnot(None),
+            SourceFile.file_ext.in_(DELETABLE_ATTACHMENT_EXTENSIONS),
+        )
+        .order_by(SourceFile.created_at.asc())
+        .all()
+    )
+
+    deleted = 0
+    failed = 0
+
+    for document in documents:
+        try:
+            if not _is_email_image_attachment(document):
+                continue
+
+            child_count = SourceFile.query.filter_by(parent_file_id=document.id).count()
+            if child_count:
+                failed += 1
+                continue
+
+            _delete_source_file_and_disk(document)
+            deleted += 1
+
+        except Exception:
+            db.session.rollback()
+            failed += 1
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Email image cleanup failed: {exc}", "error")
+        return redirect(url_for("documents.index"))
+
+    if deleted:
+        flash(f"Deleted {deleted} embedded email image attachment(s).", "success")
+
+    if failed:
+        flash(f"{failed} email image attachment(s) could not be deleted.", "error")
+
+    if not deleted and not failed:
+        flash("No embedded email image attachments found to delete.", "info")
+
+    return redirect(url_for("documents.index"))
+
+
+
 @documents_bp.route("/materialise-all", methods=["POST"])
 @login_required
 def materialise_all():
@@ -134,6 +436,7 @@ def materialise_all():
     return redirect(url_for("documents.index"))
 
 
+
 @documents_bp.route("/<int:document_id>")
 @login_required
 def detail(document_id):
@@ -147,6 +450,7 @@ def detail(document_id):
         analysis=analysis,
         can_delete_attachment_noise=can_delete_attachment_noise,
     )
+
 
 
 @documents_bp.route("/<int:document_id>/download")
@@ -164,6 +468,7 @@ def download(document_id):
     )
 
 
+
 @documents_bp.route("/<int:document_id>/process", methods=["POST"])
 @login_required
 def process(document_id):
@@ -177,6 +482,7 @@ def process(document_id):
         flash(f"Document processing failed: {exc}", "error")
 
     return redirect(url_for("documents.detail", document_id=document.id))
+
 
 
 @documents_bp.route("/<int:document_id>/local-ai-review", methods=["POST"])
@@ -216,6 +522,7 @@ def local_ai_review(document_id):
     return redirect(url_for("documents.detail", document_id=document.id))
 
 
+
 @documents_bp.route("/<int:document_id>/materialise", methods=["POST"])
 @login_required
 def materialise(document_id):
@@ -241,6 +548,7 @@ def materialise(document_id):
     return redirect(url_for("documents.detail", document_id=document.id))
 
 
+
 @documents_bp.route("/<int:document_id>/delete-attachment", methods=["POST"])
 @login_required
 def delete_attachment(document_id):
@@ -257,40 +565,10 @@ def delete_attachment(document_id):
         return redirect(url_for("documents.detail", document_id=document.id))
 
     original_filename = document.original_filename
-    storage_path = document.storage_path
-
-    extracted_text_path = None
-    body_html_path = None
-
-    if document.document_text and document.document_text.extracted_text_path:
-        extracted_text_path = document.document_text.extracted_text_path
-
-    if document.email_message and document.email_message.body_html_path:
-        body_html_path = document.email_message.body_html_path
 
     try:
-        # Remove AI/document records that have non-cascading foreign keys.
-        DocumentAnalysis.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
-        DocumentChunk.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
-        AIProcessingRun.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
-        InsightEvidence.query.filter_by(source_file_id=document.id).delete(synchronize_session=False)
-
-        # Preserve created business records but detach them from this noise file.
-        ActionItem.query.filter_by(source_file_id=document.id).update(
-            {"source_file_id": None},
-            synchronize_session=False,
-        )
-        RiskFlag.query.filter_by(source_file_id=document.id).update(
-            {"source_file_id": None},
-            synchronize_session=False,
-        )
-
-        db.session.delete(document)
+        _delete_source_file_and_disk(document)
         db.session.commit()
-
-        _delete_file_if_safe(storage_path)
-        _delete_file_if_safe(extracted_text_path)
-        _delete_file_if_safe(body_html_path)
 
         flash(f"Deleted attachment/noise file: {original_filename}", "success")
 
