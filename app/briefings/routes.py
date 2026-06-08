@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from app.extensions import db
@@ -132,7 +132,7 @@ def end_of_day():
         today_briefing=today_briefing,
         selected_date=selected_date,
         source_documents=source_documents,
-        openai_enabled=bool(request.environ.get("OPENAI_API_KEY")) or False,
+        openai_enabled=bool(current_app.config.get("OPENAI_ENABLED")) and bool(current_app.config.get("OPENAI_API_KEY")),
     )
 
 
