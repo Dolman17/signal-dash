@@ -86,6 +86,11 @@
                         <span>Exit Readiness</span>
                     </a>
 
+                    <a href="{{ url_for('due_diligence.index') }}"
+                       class="nav-link {% if request.endpoint and request.endpoint.startswith('due_diligence.') %}nav-link-active{% endif %}">
+                        <span>Due Diligence</span>
+                    </a>
+
                     <a href="{{ url_for('upload.index') }}"
                        class="nav-link {% if request.endpoint == 'upload.index' %}nav-link-active{% endif %}">
                         <span>Upload</span>
