@@ -1,4 +1,3 @@
-import click
 from flask import Flask, redirect, url_for
 from flask_login import current_user
 
@@ -36,6 +35,7 @@ def create_app(config_class=Config):
     from app.briefings.routes import briefings_bp
     from app.settings.routes import settings_bp
     from app.ingest.routes import ingest_bp
+    from app.due_diligence.registration import register_due_diligence
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -47,32 +47,12 @@ def create_app(config_class=Config):
     app.register_blueprint(briefings_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(ingest_bp)
+    register_due_diligence(app)
 
     @app.route("/")
     def index():
         if current_user.is_authenticated:
             return redirect(url_for("dashboard.index"))
         return redirect(url_for("auth.login"))
-
-    @app.cli.command("create-admin")
-    @click.option("--username", prompt=True)
-    @click.option("--email", prompt=True)
-    @click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True)
-    def create_admin(username, email, password):
-        existing = User.query.filter(
-            (User.username == username) | (User.email == email)
-        ).first()
-
-        if existing:
-            click.echo("A user with that username or email already exists.")
-            return
-
-        user = User(username=username, email=email, is_admin=True)
-        user.set_password(password)
-
-        db.session.add(user)
-        db.session.commit()
-
-        click.echo(f"Admin user created: {username}")
 
     return app
