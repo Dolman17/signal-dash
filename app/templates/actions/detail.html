@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ action.title }} · SignalDesk{% endblock %}
+{% block page_title %}Task Detail{% endblock %}
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-3">
+  <div class="glass-panel rounded-3xl p-6 xl:col-span-2">
+    <h2 class="text-xl font-semibold text-white">{{ action.title }}</h2>
+    <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{{ action.description or 'No description recorded.' }}</p>
+
+    {% if action.source_snippet %}
+      <div class="mt-6 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
+        <h3 class="text-sm font-semibold text-cyan-100">Source evidence</h3>
+        <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-cyan-50/80">{{ action.source_snippet }}</p>
+      </div>
+    {% endif %}
+
+    <div class="mt-6 flex flex-wrap gap-3">
+      {% for status in ['open', 'in_progress', 'done', 'dismissed'] %}
+        <form method="post" action="{{ url_for('actions.update_status', action_id=action.id, status=status) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700">{{ status.replace('_', ' ')|title }}</button>
+        </form>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="glass-panel rounded-3xl p-6">
+    <h3 class="text-sm font-semibold text-white">Metadata</h3>
+    <dl class="mt-4 space-y-4 text-sm">
+      <div><dt class="text-slate-500">Owner</dt><dd class="mt-1 text-slate-300">{{ action.owner or 'Unknown' }}</dd></div>
+      <div><dt class="text-slate-500">Priority</dt><dd class="mt-1 text-slate-300">{{ action.priority or 'Unknown' }}</dd></div>
+      <div><dt class="text-slate-500">Status</dt><dd class="mt-1 text-slate-300">{{ action.status }}</dd></div>
+      <div><dt class="text-slate-500">Business area</dt><dd class="mt-1 text-slate-300">{{ action.business_area or 'Unknown' }}</dd></div>
+      {% if action.source_file_id %}<div><dt class="text-slate-500">Source</dt><dd class="mt-1"><a href="{{ url_for('documents.detail', document_id=action.source_file_id) }}" class="text-cyan-300 hover:text-cyan-200">Open document</a></dd></div>{% endif %}
+    </dl>
+  </div>
+</div>
+{% endblock %}
