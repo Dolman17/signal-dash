@@ -38,6 +38,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env.docker
+    environment:
+      RUN_MIGRATIONS: "1"
+      REDIS_URL: "redis://signaldash-redis:6379/0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       signaldash-db:
         condition: service_healthy
@@ -59,6 +64,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env.docker
+    environment:
+      RUN_MIGRATIONS: "0"
+      REDIS_URL: "redis://signaldash-redis:6379/0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       signaldash-db:
         condition: service_healthy
