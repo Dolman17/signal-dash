@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ risk.title }} · SignalDesk{% endblock %}
+{% block page_title %}Issue Detail{% endblock %}
+{% block content %}
+<div class="grid gap-6 xl:grid-cols-3">
+  <div class="glass-panel rounded-3xl p-6 xl:col-span-2">
+    <h2 class="text-xl font-semibold text-white">{{ risk.title }}</h2>
+    <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{{ risk.summary or 'No summary recorded.' }}</p>
+
+    {% if risk.buyer_relevance %}
+      <div class="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5">
+        <h3 class="text-sm font-semibold text-amber-100">Buyer relevance</h3>
+        <p class="mt-3 text-sm leading-6 text-amber-50/80">{{ risk.buyer_relevance }}</p>
+      </div>
+    {% endif %}
+
+    {% if risk.mitigation %}
+      <div class="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-5">
+        <h3 class="text-sm font-semibold text-emerald-100">Mitigation</h3>
+        <p class="mt-3 text-sm leading-6 text-emerald-50/80">{{ risk.mitigation }}</p>
+      </div>
+    {% endif %}
+
+    <div class="mt-6 flex flex-wrap gap-3">
+      {% for status in ['open', 'monitoring', 'mitigated', 'closed', 'dismissed'] %}
+        <form method="post" action="{{ url_for('risks.update_status', risk_id=risk.id, status=status) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700">{{ status|title }}</button>
+        </form>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="glass-panel rounded-3xl p-6">
+    <h3 class="text-sm font-semibold text-white">Metadata</h3>
+    <dl class="mt-4 space-y-4 text-sm">
+      <div><dt class="text-slate-500">Severity</dt><dd class="mt-1 text-slate-300">{{ risk.severity or 'Unknown' }}</dd></div>
+      <div><dt class="text-slate-500">Confidence</dt><dd class="mt-1 text-slate-300">{{ risk.confidence or 'Unknown' }}</dd></div>
+      <div><dt class="text-slate-500">Status</dt><dd class="mt-1 text-slate-300">{{ risk.status }}</dd></div>
+      <div><dt class="text-slate-500">Business area</dt><dd class="mt-1 text-slate-300">{{ risk.business_area or 'Unknown' }}</dd></div>
+      {% if risk.source_file_id %}<div><dt class="text-slate-500">Source</dt><dd class="mt-1"><a href="{{ url_for('documents.detail', document_id=risk.source_file_id) }}" class="text-cyan-300 hover:text-cyan-200">Open document</a></dd></div>{% endif %}
+    </dl>
+  </div>
+</div>
+{% endblock %}
