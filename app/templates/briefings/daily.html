@@ -15,13 +15,20 @@
                 </p>
             </div>
 
-            <form method="post" action="{{ url_for('briefings.generate_daily') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit"
-                        class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
-                    Queue Today’s Briefing
-                </button>
-            </form>
+            <div class="flex flex-wrap gap-3">
+                <a href="{{ url_for('briefings.end_of_day') }}"
+                   class="rounded-xl bg-violet-500 px-4 py-2 text-sm font-bold text-white hover:bg-violet-400">
+                    End-of-Day GPT Briefing
+                </a>
+
+                <form method="post" action="{{ url_for('briefings.generate_daily') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit"
+                            class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+                        Queue Today’s Briefing
+                    </button>
+                </form>
+            </div>
         </div>
 
         {% if latest %}
@@ -52,6 +59,10 @@
                         {% elif latest.provider == "fallback" %}
                             <span class="rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
                                 Fallback Summary
+                            </span>
+                        {% elif latest.provider in ["end_of_day_queued", "end_of_day_running", "openai", "end_of_day_failed"] %}
+                            <span class="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-xs font-semibold text-violet-300">
+                                End-of-Day GPT
                             </span>
                         {% else %}
                             <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
@@ -251,7 +262,7 @@
                     The worker uses your local Ollama summary model to review recent documents, AI analyses, risks, insights and actions.
                 </p>
                 <p>
-                    Refresh this page after queueing to see the status move from queued to running to complete.
+                    For the polished written summary, use the End-of-Day GPT Briefing page.
                 </p>
             </div>
         </div>
@@ -276,6 +287,8 @@
                             <div class="mt-2 text-xs font-semibold text-emerald-300">Complete</div>
                         {% elif briefing.provider == "fallback" %}
                             <div class="mt-2 text-xs font-semibold text-slate-400">Fallback</div>
+                        {% elif briefing.provider in ["end_of_day_queued", "end_of_day_running", "openai", "end_of_day_failed"] %}
+                            <div class="mt-2 text-xs font-semibold text-violet-300">End-of-Day GPT</div>
                         {% endif %}
                     </div>
                 {% else %}
