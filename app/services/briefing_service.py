@@ -188,7 +188,14 @@ def _build_briefing_context():
 
 
 def _fallback_briefing(briefing_date, source_file_ids):
-    open_risks = RiskFlag.query.filter_by(status="open").order_by(RiskFlag.created_at.desc()).limit(5).all()
+    open_risks = (
+        RiskFlag.query
+        .filter_by(status="open")
+        .order_by(RiskFlag.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
     open_actions = (
         ActionItem.query
         .filter(ActionItem.status.in_(["open", "in_progress"]))
@@ -196,7 +203,14 @@ def _fallback_briefing(briefing_date, source_file_ids):
         .limit(5)
         .all()
     )
-    open_insights = Insight.query.filter_by(status="open").order_by(Insight.created_at.desc()).limit(5).all()
+
+    open_insights = (
+        Insight.query
+        .filter_by(status="open")
+        .order_by(Insight.created_at.desc())
+        .limit(5)
+        .all()
+    )
 
     return {
         "title": f"Daily Briefing - {briefing_date.isoformat()}",
@@ -230,11 +244,42 @@ def _fallback_briefing(briefing_date, source_file_ids):
         "exit_readiness": {
             "summary": "Review PE Exit / Due Diligence insights and evidence gaps.",
             "watch_points": [],
+            "evidence_gaps": [],
+            "buyer_questions": [],
         },
         "source_file_ids": source_file_ids,
         "provider": "fallback",
         "model_name": "local-record-summary",
     }
+
+
+def _mark_briefing_running(briefing_date, model_name):
+    briefing = DailyBriefing.query.filter_by(briefing_date=briefing_date).first()
+
+    if not briefing:
+        briefing = DailyBriefing(
+            briefing_date=briefing_date,
+            title=f"Daily Briefing - {briefing_date.isoformat()}",
+            executive_summary="Daily briefing is running in the background.",
+            highlights_json=[],
+            risks_json=[],
+            opportunities_json=[],
+            actions_json=[],
+            exit_readiness_json={},
+            source_file_ids_json=[],
+            provider="running",
+            model_name=model_name,
+        )
+        db.session.add(briefing)
+    else:
+        briefing.provider = "running"
+        briefing.model_name = model_name
+        briefing.executive_summary = "Daily briefing is running in the background."
+        briefing.updated_at = utcnow()
+
+    db.session.commit()
+
+    return briefing
 
 
 def generate_daily_briefing(target_date=None):
@@ -307,6 +352,8 @@ SIGNALDESK CONTEXT:
 
     provider = "ollama"
     model_name = model
+
+    _mark_briefing_running(briefing_date, model_name)
 
     try:
         raw = _ollama_generate(model, prompt)

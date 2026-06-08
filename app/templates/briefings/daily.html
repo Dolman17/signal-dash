@@ -11,6 +11,7 @@
                 <h2 class="text-xl font-semibold text-white">Daily Executive Briefing</h2>
                 <p class="mt-2 text-sm text-slate-400">
                     Generated from stored documents, AI analysis, open insights, risks and actions.
+                    Briefings are queued to the background worker so the page does not wait for Ollama.
                 </p>
             </div>
 
@@ -18,14 +19,14 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit"
                         class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
-                    Generate Today
+                    Queue Today’s Briefing
                 </button>
             </form>
         </div>
 
         {% if latest %}
             <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h3 class="text-lg font-semibold text-white">{{ latest.title }}</h3>
                         <p class="mt-1 text-xs text-slate-500">
@@ -34,7 +35,46 @@
                             · {{ latest.model_name or "Unknown model" }}
                         </p>
                     </div>
+
+                    <div>
+                        {% if latest.provider == "queued" %}
+                            <span class="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                                Queued
+                            </span>
+                        {% elif latest.provider == "running" %}
+                            <span class="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-300">
+                                Running
+                            </span>
+                        {% elif latest.provider == "ollama" %}
+                            <span class="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                                Local AI Complete
+                            </span>
+                        {% elif latest.provider == "fallback" %}
+                            <span class="rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300">
+                                Fallback Summary
+                            </span>
+                        {% else %}
+                            <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-400">
+                                {{ latest.provider or "Unknown" }}
+                            </span>
+                        {% endif %}
+                    </div>
                 </div>
+
+                {% if latest.provider in ["queued", "running"] %}
+                    <div class="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5">
+                        <h4 class="text-sm font-semibold text-amber-100">
+                            {% if latest.provider == "queued" %}
+                                Briefing queued
+                            {% else %}
+                                Briefing running
+                            {% endif %}
+                        </h4>
+                        <p class="mt-3 text-sm leading-6 text-amber-50/90">
+                            The worker is generating this briefing in the background. Refresh this page after the worker completes.
+                        </p>
+                    </div>
+                {% endif %}
 
                 <div class="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-5">
                     <h4 class="text-sm font-semibold text-cyan-100">Executive Summary</h4>
@@ -52,7 +92,14 @@
                                     <div class="text-sm font-semibold text-white">{{ item.get("title", "Untitled highlight") }}</div>
                                     <p class="mt-2 text-sm leading-6 text-slate-300">{{ item.get("summary", "") }}</p>
                                     {% if item.get("why_it_matters") %}
-                                        <p class="mt-2 text-xs leading-5 text-slate-500">Why it matters: {{ item.get("why_it_matters") }}</p>
+                                        <p class="mt-2 text-xs leading-5 text-slate-500">
+                                            Why it matters: {{ item.get("why_it_matters") }}
+                                        </p>
+                                    {% endif %}
+                                    {% if item.get("source_hint") %}
+                                        <p class="mt-2 text-xs leading-5 text-cyan-200/70">
+                                            Source hint: {{ item.get("source_hint") }}
+                                        </p>
                                     {% endif %}
                                 </div>
                             {% else %}
@@ -68,11 +115,20 @@
                                 <div class="rounded-xl bg-slate-950/70 p-3">
                                     <div class="flex items-start justify-between gap-3">
                                         <div class="text-sm font-semibold text-red-100">{{ item.get("title", "Untitled risk") }}</div>
-                                        <span class="rounded-full bg-red-400/10 px-2 py-1 text-xs text-red-200">{{ item.get("severity", "Unknown") }}</span>
+                                        <span class="rounded-full bg-red-400/10 px-2 py-1 text-xs text-red-200">
+                                            {{ item.get("severity", "Unknown") }}
+                                        </span>
                                     </div>
                                     <p class="mt-2 text-sm leading-6 text-red-100/80">{{ item.get("summary", "") }}</p>
+                                    {% if item.get("buyer_relevance") %}
+                                        <p class="mt-2 text-xs leading-5 text-red-100/70">
+                                            Buyer relevance: {{ item.get("buyer_relevance") }}
+                                        </p>
+                                    {% endif %}
                                     {% if item.get("recommended_action") %}
-                                        <p class="mt-2 text-xs leading-5 text-red-100/70">Action: {{ item.get("recommended_action") }}</p>
+                                        <p class="mt-2 text-xs leading-5 text-red-100/70">
+                                            Action: {{ item.get("recommended_action") }}
+                                        </p>
                                     {% endif %}
                                 </div>
                             {% else %}
@@ -90,6 +146,11 @@
                                 <div class="rounded-xl bg-slate-950/70 p-3">
                                     <div class="text-sm font-semibold text-emerald-100">{{ item.get("title", "Untitled opportunity") }}</div>
                                     <p class="mt-2 text-sm leading-6 text-emerald-100/80">{{ item.get("summary", "") }}</p>
+                                    {% if item.get("why_it_matters") %}
+                                        <p class="mt-2 text-xs leading-5 text-emerald-100/70">
+                                            Why it matters: {{ item.get("why_it_matters") }}
+                                        </p>
+                                    {% endif %}
                                 </div>
                             {% else %}
                                 <p class="text-sm text-emerald-100/70">No opportunities generated.</p>
@@ -173,27 +234,54 @@
             <div class="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-8 text-center">
                 <h3 class="text-lg font-semibold text-white">No briefing yet</h3>
                 <p class="mt-2 text-sm text-slate-400">
-                    Click Generate Today to create the first daily briefing from your current records.
+                    Click Queue Today’s Briefing to create the first daily briefing from your current records.
                 </p>
             </div>
         {% endif %}
     </div>
 
-    <div class="glass-panel rounded-3xl p-6">
-        <h3 class="text-sm font-semibold text-white">Recent Briefings</h3>
+    <div class="space-y-6">
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">How this works</h3>
+            <div class="mt-4 space-y-3 text-sm leading-6 text-slate-400">
+                <p>
+                    The briefing request is sent to the Redis queue and processed by the SignalDesk worker.
+                </p>
+                <p>
+                    The worker uses your local Ollama summary model to review recent documents, AI analyses, risks, insights and actions.
+                </p>
+                <p>
+                    Refresh this page after queueing to see the status move from queued to running to complete.
+                </p>
+            </div>
+        </div>
 
-        <div class="mt-4 space-y-3">
-            {% for briefing in briefings %}
-                <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                    <div class="text-sm font-semibold text-white">{{ briefing.title }}</div>
-                    <div class="mt-1 text-xs text-slate-500">
-                        {{ briefing.briefing_date.strftime("%d %b %Y") }}
-                        · {{ briefing.provider or "Unknown" }}
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-sm font-semibold text-white">Recent Briefings</h3>
+
+            <div class="mt-4 space-y-3">
+                {% for briefing in briefings %}
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                        <div class="text-sm font-semibold text-white">{{ briefing.title }}</div>
+                        <div class="mt-1 text-xs text-slate-500">
+                            {{ briefing.briefing_date.strftime("%d %b %Y") }}
+                            · {{ briefing.provider or "Unknown" }}
+                        </div>
+
+                        {% if briefing.provider == "queued" %}
+                            <div class="mt-2 text-xs font-semibold text-amber-300">Queued</div>
+                        {% elif briefing.provider == "running" %}
+                            <div class="mt-2 text-xs font-semibold text-sky-300">Running</div>
+                        {% elif briefing.provider == "ollama" %}
+                            <div class="mt-2 text-xs font-semibold text-emerald-300">Complete</div>
+                        {% elif briefing.provider == "fallback" %}
+                            <div class="mt-2 text-xs font-semibold text-slate-400">Fallback</div>
+                        {% endif %}
                     </div>
-                </div>
-            {% else %}
-                <p class="text-sm text-slate-500">No stored briefings yet.</p>
-            {% endfor %}
+                {% else %}
+                    <p class="text-sm text-slate-500">No stored briefings yet.</p>
+                {% endfor %}
+            </div>
         </div>
     </div>
 </div>

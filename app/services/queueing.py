@@ -1,6 +1,8 @@
+from datetime import date
+
+from flask import current_app
 from redis import Redis
 from rq import Queue
-from flask import current_app
 
 
 def get_redis_connection():
@@ -22,6 +24,24 @@ def enqueue_local_ai_review(source_file_id: int):
         result_ttl=86400,
         failure_ttl=86400,
         description=f"Local AI review for SourceFile {source_file_id}",
+    )
+
+    return job
+
+
+def enqueue_daily_briefing(target_date=None):
+    queue = get_queue("briefings")
+
+    briefing_date = target_date or date.today()
+    briefing_date_iso = briefing_date.isoformat()
+
+    job = queue.enqueue(
+        "app.jobs.briefing_jobs.run_daily_briefing_job",
+        briefing_date_iso,
+        job_timeout=1800,
+        result_ttl=86400,
+        failure_ttl=86400,
+        description=f"Daily briefing for {briefing_date_iso}",
     )
 
     return job
