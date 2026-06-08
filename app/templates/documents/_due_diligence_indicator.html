@@ -1,0 +1,30 @@
+<div class="glass-panel rounded-3xl p-6">
+    <h3 class="text-sm font-semibold text-white">Due Diligence Evidence</h3>
+
+    {% if due_diligence_categories %}
+        <p class="mt-3 text-sm leading-6 text-slate-400">
+            This document is currently contributing to the exit-readiness evidence library.
+        </p>
+
+        <div class="mt-4 space-y-3">
+            {% for category in due_diligence_categories %}
+                <a href="{{ url_for('due_diligence.category', slug=category.slug) }}"
+                   class="block rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 hover:bg-cyan-400/20">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-semibold text-white">{{ category.name }}</div>
+                            <div class="mt-1 text-xs text-cyan-100/70">
+                                {{ category.status }} · {{ category.score }}% readiness
+                            </div>
+                        </div>
+                        <span class="text-xs font-semibold text-cyan-200">Open →</span>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="mt-3 text-sm leading-6 text-slate-400">
+            This document is not yet strongly linked to a due diligence category. Run local AI review or create records from AI to strengthen its evidence trail.
+        </p>
+    {% endif %}
+</div>
