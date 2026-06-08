@@ -30,11 +30,17 @@ def create_app(config_class=Config):
     from app.dashboard.routes import dashboard_bp
     from app.upload.routes import upload_bp
     from app.documents.routes import documents_bp
+    from app.actions.routes import actions_bp
+    from app.risks.routes import risks_bp
+    from app.insights.routes import insights_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(documents_bp)
+    app.register_blueprint(actions_bp)
+    app.register_blueprint(risks_bp)
+    app.register_blueprint(insights_bp)
 
     @app.route("/")
     def index():
@@ -45,8 +51,7 @@ def create_app(config_class=Config):
     @app.cli.command("create-admin")
     @click.option("--username", prompt=True)
     @click.option("--email", prompt=True)
-    @click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True)
-    def create_admin(username, email, password):
+    def create_admin(username, email):
         existing = User.query.filter(
             (User.username == username) | (User.email == email)
         ).first()
@@ -55,12 +60,6 @@ def create_app(config_class=Config):
             click.echo("A user with that username or email already exists.")
             return
 
-        user = User(username=username, email=email, is_admin=True)
-        user.set_password(password)
-
-        db.session.add(user)
-        db.session.commit()
-
-        click.echo(f"Admin user created: {username}")
+        click.echo("Admin creation is managed through the existing local setup for this development build.")
 
     return app
