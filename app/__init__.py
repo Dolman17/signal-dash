@@ -51,7 +51,8 @@ def create_app(config_class=Config):
     @app.cli.command("create-admin")
     @click.option("--username", prompt=True)
     @click.option("--email", prompt=True)
-    def create_admin(username, email):
+    @click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True)
+    def create_admin(username, email, password):
         existing = User.query.filter(
             (User.username == username) | (User.email == email)
         ).first()
@@ -60,6 +61,12 @@ def create_app(config_class=Config):
             click.echo("A user with that username or email already exists.")
             return
 
-        click.echo("Admin creation is managed through the existing local setup for this development build.")
+        user = User(username=username, email=email, is_admin=True)
+        user.set_password(password)
+
+        db.session.add(user)
+        db.session.commit()
+
+        click.echo(f"Admin user created: {username}")
 
     return app

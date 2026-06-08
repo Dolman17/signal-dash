@@ -95,6 +95,23 @@
                        class="nav-link {% if request.endpoint and request.endpoint.startswith('documents.') %}nav-link-active{% endif %}">
                         <span>Documents</span>
                     </a>
+
+                    <div class="my-3 border-t border-slate-800"></div>
+
+                    <a href="{{ url_for('insights.index') }}"
+                       class="nav-link {% if request.endpoint and request.endpoint.startswith('insights.') %}nav-link-active{% endif %}">
+                        <span>Insights</span>
+                    </a>
+
+                    <a href="{{ url_for('risks.index') }}"
+                       class="nav-link {% if request.endpoint and request.endpoint.startswith('risks.') %}nav-link-active{% endif %}">
+                        <span>Risks</span>
+                    </a>
+
+                    <a href="{{ url_for('actions.index') }}"
+                       class="nav-link {% if request.endpoint and request.endpoint.startswith('actions.') %}nav-link-active{% endif %}">
+                        <span>Actions</span>
+                    </a>
                 </nav>
 
                 <div class="border-t border-slate-800/80 p-4">
