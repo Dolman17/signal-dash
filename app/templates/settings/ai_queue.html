@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}AI Queue · SignalDesk{% endblock %}
-{% block page_title %}AI Queue Monitor{% endblock %}
+{% block page_title %}AI Queue Control Centre{% endblock %}
 
 {% block content %}
 <div class="grid gap-6 xl:grid-cols-3">
@@ -9,9 +9,9 @@
         <div class="glass-panel rounded-3xl p-6">
             <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
-                    <h2 class="text-xl font-semibold text-white">AI Queue Monitor</h2>
+                    <h2 class="text-xl font-semibold text-white">AI Queue Control Centre</h2>
                     <p class="mt-2 text-sm leading-6 text-slate-400">
-                        Live Redis/RQ queue view for local AI reviews, daily briefings, cloud AI, ingest jobs and default background work.
+                        Live Redis/RQ queue view for local AI reviews, GPT briefings, cloud AI, ingest jobs and default background work.
                     </p>
                 </div>
 
@@ -28,7 +28,7 @@
                 </div>
             </div>
 
-            <div class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+            <div class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-7">
                 <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
                     <div class="text-xs uppercase tracking-wider text-amber-100/60">Queued</div>
                     <div class="mt-2 text-2xl font-bold text-amber-100">{{ queue_overview.total_counts.queued }}</div>
@@ -58,6 +58,13 @@
                     <div class="text-xs uppercase tracking-wider text-slate-500">Scheduled</div>
                     <div class="mt-2 text-2xl font-bold text-white">{{ queue_overview.total_counts.scheduled }}</div>
                 </div>
+
+                <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
+                    <div class="text-xs uppercase tracking-wider text-cyan-100/60">Backlog est.</div>
+                    <div class="mt-2 text-2xl font-bold text-cyan-100">
+                        {{ queue_overview.total_estimated_backlog_minutes or 0 }}m
+                    </div>
+                </div>
             </div>
 
             {% if queue_overview.error %}
@@ -68,13 +75,74 @@
             {% endif %}
         </div>
 
+        <div class="glass-panel rounded-3xl p-6">
+            <h3 class="text-lg font-semibold text-white">Workflow Controls</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-400">
+                These controls are stored in Redis and support quick operational pause/resume decisions.
+            </p>
+
+            <div class="mt-5 grid gap-4 md:grid-cols-3">
+                {% for key, label, note in [
+                    ('auto_ingest', 'Auto ingest', 'Controls scheduled scanning of the ingest folder.'),
+                    ('auto_extract', 'Auto extraction', 'Controls scheduled text extraction after ingest.'),
+                    ('auto_ai', 'Auto local AI queue', 'Controls scheduled local AI review batching.')
+                ] %}
+                    {% set enabled = workflow_controls.get(key, true) if workflow_controls else true %}
+
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <div class="text-sm font-semibold text-white">{{ label }}</div>
+                                <div class="mt-1 text-xs {% if enabled %}text-emerald-300{% else %}text-amber-300{% endif %}">
+                                    {{ "Enabled" if enabled else "Paused" }}
+                                </div>
+                                <p class="mt-2 text-xs leading-5 text-slate-500">
+                                    {{ note }}
+                                </p>
+                            </div>
+
+                            <form method="post" action="{{ url_for('settings.workflow_control') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="control" value="{{ key }}">
+                                <input type="hidden" name="enabled" value="{{ 'false' if enabled else 'true' }}">
+                                <input type="hidden" name="next" value="{{ url_for('settings.ai_queue') }}">
+
+                                <button type="submit"
+                                        class="rounded-xl px-3 py-2 text-xs font-bold {% if enabled %}bg-amber-500 text-slate-950 hover:bg-amber-400{% else %}bg-emerald-500 text-slate-950 hover:bg-emerald-400{% endif %}">
+                                    {{ "Pause" if enabled else "Resume" }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% if workflow_controls and workflow_controls.env %}
+                <div class="mt-5 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <h4 class="text-sm font-semibold text-white">Current scheduler settings</h4>
+                    <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {% for label, value in workflow_controls.env.items() %}
+                            <div class="rounded-xl bg-slate-900 p-3">
+                                <div class="text-xs text-slate-500">{{ label }}</div>
+                                <div class="mt-1 font-mono text-sm text-slate-200">{{ value }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
         {% for queue in queue_overview.queues %}
             <div class="glass-panel rounded-3xl p-6">
                 <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h3 class="text-lg font-semibold text-white">{{ queue.name }}</h3>
                         <p class="mt-1 text-sm text-slate-400">
-                            Queue status and recent jobs.
+                            Owned by <span class="font-semibold text-cyan-300">{{ queue.owner }}</span>
+                            · backlog estimate {{ queue.estimated_backlog_minutes or 0 }} min
+                            {% if queue.oldest_queued_age_minutes is not none %}
+                                · oldest queued {{ queue.oldest_queued_age_minutes }} min ago
+                            {% endif %}
                         </p>
                     </div>
 
@@ -99,7 +167,13 @@
                     </div>
 
                     <div class="rounded-2xl border border-sky-400/20 bg-sky-400/10 p-5">
-                        <h4 class="text-sm font-semibold text-sky-100">Started Jobs</h4>
+                        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <h4 class="text-sm font-semibold text-sky-100">Started Jobs</h4>
+                            <p class="text-xs text-sky-100/70">
+                                Use “Mark Stale” only if the worker was restarted and the job is clearly abandoned.
+                            </p>
+                        </div>
+
                         <div class="mt-3 space-y-3">
                             {% for job in queue.started_jobs %}
                                 {% include "settings/_queue_job_card.html" %}
@@ -187,27 +261,28 @@
         </div>
 
         <div class="glass-panel rounded-3xl p-6">
-            <h3 class="text-sm font-semibold text-white">Queue Names</h3>
+            <h3 class="text-sm font-semibold text-white">Queue Ownership</h3>
 
             <div class="mt-4 space-y-3">
-                {% for name in queue_names %}
+                {% for queue in queue_overview.queues %}
                     <div class="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-3">
-                        <div class="font-mono text-sm text-slate-200">{{ name }}</div>
+                        <div class="font-mono text-sm text-slate-200">{{ queue.name }}</div>
+                        <div class="mt-1 text-xs text-cyan-300">{{ queue.owner }}</div>
                     </div>
                 {% endfor %}
             </div>
         </div>
 
         <div class="glass-panel rounded-3xl p-6">
-            <h3 class="text-sm font-semibold text-white">Server Check</h3>
+            <h3 class="text-sm font-semibold text-white">Server Checks</h3>
+
             <div class="mt-3 space-y-3 text-sm leading-6 text-slate-400">
-                <p>
-                    The worker should show as running in Docker:
-                </p>
                 <pre class="overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">docker compose ps
-docker compose logs -f signaldash-worker</pre>
+docker compose logs -f signaldash-worker
+docker compose -f docker-compose.yml -f docker-compose.briefing.yml logs -f signaldash-briefing-worker</pre>
+
                 <p>
-                    If jobs remain queued but never start, the worker is stopped or cannot reach Redis.
+                    If briefings are queued, confirm the briefing worker is running and listening on briefings/cloud_ai.
                 </p>
             </div>
         </div>
