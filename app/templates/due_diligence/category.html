@@ -19,18 +19,61 @@
             </div>
         </div>
 
-        <div class="mt-6 grid gap-4 md:grid-cols-6">
+        <div class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-9">
             <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Documents</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.documents }}</div></div>
-            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">AI Analyses</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.analyses }}</div></div>
+            <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4"><div class="text-xs text-cyan-100/60">Curated</div><div class="mt-2 text-xl font-bold text-cyan-100">{{ category.counts.curated_evidence }}</div></div>
+            <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><div class="text-xs text-emerald-100/60">Pinned</div><div class="mt-2 text-xl font-bold text-emerald-100">{{ category.counts.pinned_evidence }}</div></div>
+            <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-4"><div class="text-xs text-red-100/60">Excluded</div><div class="mt-2 text-xl font-bold text-red-100">{{ category.counts.excluded_evidence }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">AI</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.analyses }}</div></div>
             <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Risks</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.risks }}</div></div>
             <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">High Risks</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.high_risks }}</div></div>
             <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Actions</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.actions }}</div></div>
-            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Open Actions</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.open_actions }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Open</div><div class="mt-2 text-xl font-bold text-white">{{ category.counts.open_actions }}</div></div>
         </div>
     </div>
 
     <div class="grid gap-6 xl:grid-cols-3">
         <div class="space-y-6 xl:col-span-2">
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold text-white">Pinned Key Evidence</h3>
+                <div class="mt-4 space-y-3">
+                    {% for item in category.pinned_evidence %}
+                        <a href="{{ url_for('documents.detail', document_id=item.source_file_id) }}" class="block rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 hover:bg-emerald-400/20">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <div class="text-sm font-semibold text-white">{{ item.title }}</div>
+                                    <div class="mt-1 text-xs text-emerald-100/70">{{ item.evidence_strength or 'unrated' }} · buyer relevance {{ item.buyer_relevance or 'unrated' }}</div>
+                                    {% if item.management_note %}<p class="mt-2 text-sm leading-6 text-emerald-50/90">{{ item.management_note }}</p>{% endif %}
+                                </div>
+                                <span class="status-pill bg-emerald-400/10 text-emerald-300">Key Evidence</span>
+                            </div>
+                        </a>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No pinned key evidence yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold text-white">Curated Evidence</h3>
+                <div class="mt-4 space-y-3">
+                    {% for item in category.curated_evidence %}
+                        <a href="{{ url_for('documents.detail', document_id=item.source_file_id) }}" class="block rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 hover:bg-cyan-400/20">
+                            <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                    <div class="text-sm font-semibold text-white">{{ item.title }}</div>
+                                    <div class="mt-1 text-xs text-cyan-100/70">{{ item.evidence_strength or 'unrated' }} · buyer relevance {{ item.buyer_relevance or 'unrated' }}</div>
+                                    {% if item.management_note %}<p class="mt-2 text-sm leading-6 text-cyan-50/90">{{ item.management_note }}</p>{% endif %}
+                                </div>
+                                <span class="text-xs font-semibold text-cyan-200">Open →</span>
+                            </div>
+                        </a>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No manually curated evidence yet. Use the curation form on document detail pages.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
             <div class="glass-panel rounded-3xl p-6">
                 <h3 class="text-lg font-semibold text-white">Linked Documents</h3>
                 <div class="mt-4 space-y-3">
@@ -39,9 +82,9 @@
                             <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                                 <div>
                                     <div class="text-sm font-semibold text-white">{{ document.title }}</div>
-                                    <div class="mt-1 text-xs text-slate-500">SourceFile {{ document.id }} · {{ document.status }}{% if document.business_area %} · {{ document.business_area }}{% endif %}</div>
+                                    <div class="mt-1 text-xs text-slate-500">SourceFile {{ document.source_file_id or document.id }} · {{ document.status }}{% if document.business_area %} · {{ document.business_area }}{% endif %}{% if document.manual %} · manually curated{% endif %}</div>
                                 </div>
-                                <a href="{{ url_for('documents.detail', document_id=document.id) }}" class="text-xs font-semibold text-cyan-300 hover:text-cyan-100">Open →</a>
+                                <a href="{{ url_for('documents.detail', document_id=document.source_file_id or document.id) }}" class="text-xs font-semibold text-cyan-300 hover:text-cyan-100">Open →</a>
                             </div>
                         </div>
                     {% else %}
@@ -107,12 +150,51 @@
 
         <div class="space-y-6">
             <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-semibold text-white">Management Commentary</h3>
+                {% set note = category.note %}
+                <form method="post" action="{{ url_for('due_diligence.update_category_note', slug=category.slug) }}" class="mt-4 space-y-4">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div>
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Current position</label>
+                        <textarea name="current_position" rows="3" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">{{ note.current_position if note else '' }}</textarea>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Known gaps</label>
+                        <textarea name="known_gaps" rows="3" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">{{ note.known_gaps if note else '' }}</textarea>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Mitigating actions</label>
+                        <textarea name="mitigating_actions" rows="3" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">{{ note.mitigating_actions if note else '' }}</textarea>
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Buyer response angle</label>
+                        <textarea name="buyer_response_angle" rows="3" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">{{ note.buyer_response_angle if note else '' }}</textarea>
+                    </div>
+                    <button type="submit" class="w-full rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">Save Commentary</button>
+                </form>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
                 <h3 class="text-sm font-semibold text-white">Missing Evidence</h3>
                 <div class="mt-4 space-y-3">
                     {% for item in category.missing_evidence %}
                         <div class="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">{{ item }}</div>
                     {% else %}
                         <p class="text-sm text-emerald-300">No expected evidence gaps identified for this category.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-semibold text-white">Excluded Evidence</h3>
+                <div class="mt-4 space-y-3">
+                    {% for item in category.excluded_evidence %}
+                        <a href="{{ url_for('documents.detail', document_id=item.source_file_id) }}" class="block rounded-xl border border-red-400/20 bg-red-400/10 p-3 hover:bg-red-400/20">
+                            <div class="text-sm font-semibold text-white">{{ item.title }}</div>
+                            {% if item.management_note %}<div class="mt-1 text-xs text-red-100/70">{{ item.management_note }}</div>{% endif %}
+                        </a>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No evidence excluded from this category.</p>
                     {% endfor %}
                 </div>
             </div>
