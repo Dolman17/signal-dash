@@ -1,9 +1,13 @@
 <div class="glass-panel rounded-3xl p-6">
     <h3 class="text-sm font-semibold text-white">Due Diligence Evidence</h3>
 
+    {% set dd_records = document.due_diligence_evidence or [] %}
+    {% set selected_slugs = dd_records|map(attribute='category_slug')|list %}
+    {% set first_record = dd_records[0] if dd_records else None %}
+
     {% if due_diligence_categories %}
         <p class="mt-3 text-sm leading-6 text-slate-400">
-            This document is currently contributing to the exit-readiness evidence library.
+            This document is contributing to the exit-readiness evidence library.
         </p>
 
         <div class="mt-4 space-y-3">
@@ -24,7 +28,91 @@
         </div>
     {% else %}
         <p class="mt-3 text-sm leading-6 text-slate-400">
-            This document is not yet strongly linked to a due diligence category. Run local AI review or create records from AI to strengthen its evidence trail.
+            This document is not yet strongly linked to a due diligence category. Use the curation form below to assign it manually.
         </p>
     {% endif %}
+
+    <form method="post"
+          action="{{ url_for('due_diligence.update_document_curation', document_id=document.id) }}"
+          class="mt-5 space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div>
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Manual categories</div>
+            <div class="mt-3 space-y-2 text-sm">
+                {% set category_options = [
+                    ('people-workforce', 'People & Workforce'),
+                    ('recruitment-retention', 'Recruitment & Retention'),
+                    ('contracts-commercial', 'Contracts & Commercial'),
+                    ('operations-service-delivery', 'Operations & Service Delivery'),
+                    ('finance-cost-pressure', 'Finance & Cost Pressure'),
+                    ('compliance-regulation', 'Compliance & Regulation'),
+                    ('technology-systems', 'Technology & Systems'),
+                    ('legal-risk-governance', 'Legal / Risk / Governance'),
+                    ('growth-opportunities', 'Growth Opportunities'),
+                    ('management-capability', 'Management Capability')
+                ] %}
+
+                {% for slug, label in category_options %}
+                    <label class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-300">
+                        <input type="checkbox"
+                               name="category_slug"
+                               value="{{ slug }}"
+                               {% if slug in selected_slugs %}checked{% endif %}
+                               class="rounded border-slate-700 bg-slate-950 text-cyan-500">
+                        <span>{{ label }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div>
+            <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Evidence strength</label>
+            <select name="evidence_strength" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">
+                {% set current_strength = first_record.evidence_strength if first_record else '' %}
+                <option value="" {% if not current_strength %}selected{% endif %}>Not rated</option>
+                <option value="strong" {% if current_strength == 'strong' %}selected{% endif %}>Strong</option>
+                <option value="adequate" {% if current_strength == 'adequate' %}selected{% endif %}>Adequate</option>
+                <option value="weak" {% if current_strength == 'weak' %}selected{% endif %}>Weak</option>
+                <option value="not_relevant" {% if current_strength == 'not_relevant' %}selected{% endif %}>Not relevant</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Buyer relevance</label>
+            <select name="buyer_relevance" class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">
+                {% set current_relevance = first_record.buyer_relevance if first_record else '' %}
+                <option value="" {% if not current_relevance %}selected{% endif %}>Not rated</option>
+                <option value="high" {% if current_relevance == 'high' %}selected{% endif %}>High</option>
+                <option value="medium" {% if current_relevance == 'medium' %}selected{% endif %}>Medium</option>
+                <option value="low" {% if current_relevance == 'low' %}selected{% endif %}>Low</option>
+                <option value="none" {% if current_relevance == 'none' %}selected{% endif %}>None</option>
+            </select>
+        </div>
+
+        <div class="grid gap-2 text-sm">
+            <label class="flex items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-emerald-100">
+                <input type="checkbox" name="is_pinned" value="1" {% if first_record and first_record.is_pinned %}checked{% endif %}>
+                <span>Pin as key evidence</span>
+            </label>
+
+            <label class="flex items-center gap-3 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-red-100">
+                <input type="checkbox" name="is_excluded" value="1" {% if first_record and first_record.is_excluded %}checked{% endif %}>
+                <span>Exclude from due diligence scoring</span>
+            </label>
+        </div>
+
+        <div>
+            <label class="text-xs font-semibold uppercase tracking-wider text-slate-500">Management note</label>
+            <textarea name="management_note"
+                      rows="4"
+                      class="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                      placeholder="Why this document matters, how to use it with buyers, or why it should be excluded.">{{ first_record.management_note if first_record else '' }}</textarea>
+        </div>
+
+        <button type="submit"
+                class="w-full rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">
+            Save Curation
+        </button>
+    </form>
 </div>
