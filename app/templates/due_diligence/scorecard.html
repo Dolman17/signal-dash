@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Exit Readiness Scorecard · SignalDesk{% endblock %}
+{% block page_title %}Exit Readiness Scorecard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="glass-panel rounded-3xl p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <a href="{{ url_for('due_diligence.index') }}" class="text-sm font-semibold text-cyan-300 hover:text-cyan-100">← Due diligence library</a>
+                <h2 class="mt-3 text-xl font-semibold text-white">Exit Readiness Scorecard</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    Evidence-linked scoring across each buyer due diligence category. Scores are directional and based on current SignalDesk records.
+                </p>
+            </div>
+            <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-5 py-4 text-center">
+                <div class="text-xs uppercase tracking-wider text-cyan-100/60">Overall Score</div>
+                <div class="mt-2 text-3xl font-bold text-cyan-100">{{ library.totals.overall_score }}%</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6">
+        <div class="overflow-hidden rounded-2xl border border-slate-800">
+            <table class="min-w-full divide-y divide-slate-800">
+                <thead class="bg-slate-950/70">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Category</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Score</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Evidence</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Reason</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800 bg-slate-950/30">
+                    {% for category in library.categories %}
+                        <tr>
+                            <td class="px-4 py-3">
+                                <a href="{{ url_for('due_diligence.category', slug=category.slug) }}" class="font-semibold text-cyan-300 hover:text-cyan-100">{{ category.name }}</a>
+                            </td>
+                            <td class="px-4 py-3">
+                                {% set status = category.status %}
+                                {% include "due_diligence/_status_pill.html" %}
+                            </td>
+                            <td class="px-4 py-3 text-sm font-semibold text-white">{{ category.score }}%</td>
+                            <td class="px-4 py-3 text-sm text-slate-300">
+                                {{ category.counts.documents }} docs · {{ category.counts.analyses }} AI · {{ category.counts.risks }} risks · {{ category.counts.actions }} actions
+                            </td>
+                            <td class="px-4 py-3 text-sm leading-6 text-slate-400">{{ category.reason }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
