@@ -104,6 +104,13 @@ class SourceFile(db.Model):
         order_by="ProcessingLog.created_at.desc()",
     )
 
+    due_diligence_evidence = db.relationship(
+        "DueDiligenceEvidence",
+        back_populates="source_file",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
     __table_args__ = (
         db.UniqueConstraint("sha256_hash", "file_size", name="uq_source_file_hash_size"),
     )
@@ -222,20 +229,24 @@ class EmailRecipient(db.Model):
     email_message = db.relationship("EmailMessage", back_populates="recipients")
 
 
-class EmailDraft(db.Model):
-    __tablename__ = "email_drafts"
+class AIProcessingRun(db.Model):
+    __tablename__ = "ai_processing_runs"
 
     id = db.Column(db.Integer, primary_key=True)
-    email_message_id = db.Column(db.Integer, db.ForeignKey("email_messages.id"), nullable=False)
+    source_file_id = db.Column(db.Integer, db.ForeignKey("source_files.id"), nullable=False)
 
-    draft_type = db.Column(db.String(120), nullable=True)
-    tone = db.Column(db.String(120), nullable=True)
-    subject = db.Column(db.String(500), nullable=True)
-    body = db.Column(db.Text, nullable=True)
+    provider = db.Column(db.String(80), nullable=False)
+    model_name = db.Column(db.String(160), nullable=False)
+    task_type = db.Column(db.String(120), nullable=False)
+    status = db.Column(db.String(80), default="queued", nullable=False, index=True)
 
-    ai_provider = db.Column(db.String(80), nullable=True)
-    ai_model = db.Column(db.String(160), nullable=True)
-    status = db.Column(db.String(80), default="draft", nullable=False)
+    prompt_hash = db.Column(db.String(64), nullable=True)
+    input_token_estimate = db.Column(db.Integer, default=0, nullable=False)
+    output_token_estimate = db.Column(db.Integer, default=0, nullable=False)
+
+    started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(
@@ -246,37 +257,14 @@ class EmailDraft(db.Model):
     )
 
 
-class AIProcessingRun(db.Model):
-    __tablename__ = "ai_processing_runs"
-
-    id = db.Column(db.Integer, primary_key=True)
-    source_file_id = db.Column(db.Integer, db.ForeignKey("source_files.id"), nullable=True)
-
-    run_type = db.Column(db.String(120), nullable=False)
-    provider = db.Column(db.String(80), nullable=False)
-    model_name = db.Column(db.String(160), nullable=False)
-    prompt_version = db.Column(db.String(120), nullable=True)
-
-    input_token_estimate = db.Column(db.Integer, default=0, nullable=False)
-    output_token_estimate = db.Column(db.Integer, default=0, nullable=False)
-    estimated_cost = db.Column(db.Numeric(10, 4), default=0, nullable=False)
-
-    status = db.Column(db.String(80), default="pending", nullable=False)
-    started_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    error_message = db.Column(db.Text, nullable=True)
-
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
-
-
 class DocumentAnalysis(db.Model):
     __tablename__ = "document_analyses"
 
     id = db.Column(db.Integer, primary_key=True)
     source_file_id = db.Column(db.Integer, db.ForeignKey("source_files.id"), nullable=False)
 
-    provider = db.Column(db.String(80), nullable=True)
-    model_name = db.Column(db.String(160), nullable=True)
+    provider = db.Column(db.String(80), nullable=False)
+    model_name = db.Column(db.String(160), nullable=False)
 
     summary = db.Column(db.Text, nullable=True)
     detailed_summary = db.Column(db.Text, nullable=True)
@@ -287,11 +275,14 @@ class DocumentAnalysis(db.Model):
     risks_json = db.Column(db.JSON, nullable=True)
     opportunities_json = db.Column(db.JSON, nullable=True)
     entities_json = db.Column(db.JSON, nullable=True)
+
     due_diligence_json = db.Column(db.JSON, nullable=True)
     buyer_questions_json = db.Column(db.JSON, nullable=True)
 
-    evidence_strength = db.Column(db.String(80), nullable=True)
     confidence_score = db.Column(db.Float, nullable=True)
+    evidence_strength = db.Column(db.String(80), nullable=True)
+
+    raw_response_path = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(
@@ -418,6 +409,64 @@ class RiskFlag(db.Model):
         onupdate=utcnow,
         nullable=False,
     )
+
+
+class DueDiligenceEvidence(db.Model):
+    __tablename__ = "due_diligence_evidence"
+
+    id = db.Column(db.Integer, primary_key=True)
+    source_file_id = db.Column(db.Integer, db.ForeignKey("source_files.id"), nullable=False)
+    category_slug = db.Column(db.String(160), nullable=False, index=True)
+
+    evidence_strength = db.Column(db.String(80), nullable=True, index=True)
+    buyer_relevance = db.Column(db.String(80), nullable=True, index=True)
+
+    is_pinned = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    is_excluded = db.Column(db.Boolean, default=False, nullable=False, index=True)
+
+    management_note = db.Column(db.Text, nullable=True)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    updated_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    source_file = db.relationship("SourceFile", back_populates="due_diligence_evidence")
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+    updated_by = db.relationship("User", foreign_keys=[updated_by_id])
+
+    __table_args__ = (
+        db.UniqueConstraint("source_file_id", "category_slug", name="uq_dd_evidence_source_category"),
+    )
+
+
+class DueDiligenceCategoryNote(db.Model):
+    __tablename__ = "due_diligence_category_notes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    category_slug = db.Column(db.String(160), unique=True, nullable=False, index=True)
+
+    current_position = db.Column(db.Text, nullable=True)
+    known_gaps = db.Column(db.Text, nullable=True)
+    mitigating_actions = db.Column(db.Text, nullable=True)
+    buyer_response_angle = db.Column(db.Text, nullable=True)
+
+    updated_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        nullable=False,
+    )
+
+    updated_by = db.relationship("User")
 
 
 class SystemSetting(db.Model):
