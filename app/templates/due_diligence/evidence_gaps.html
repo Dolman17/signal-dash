@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Evidence Gaps · SignalDesk{% endblock %}
+{% block page_title %}Evidence Gap Tracker{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="glass-panel rounded-3xl p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+                <a href="{{ url_for('due_diligence.index') }}" class="text-sm font-semibold text-cyan-300 hover:text-cyan-100">← Due diligence library</a>
+                <h2 class="mt-3 text-xl font-semibold text-white">Evidence Gap Tracker</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    Missing or weak evidence that could be requested by a buyer, adviser, lender or PE house during diligence.
+                </p>
+            </div>
+            <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-5 py-4 text-center">
+                <div class="text-xs uppercase tracking-wider text-amber-100/60">Open Gaps</div>
+                <div class="mt-2 text-3xl font-bold text-amber-100">{{ gaps|length }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-5">
+        {% for gap in gaps %}
+            <div class="glass-panel rounded-3xl p-5">
+                <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            {% if gap.priority == "High" %}
+                                <span class="status-pill bg-red-400/10 text-red-300">High</span>
+                            {% elif gap.priority == "Medium" %}
+                                <span class="status-pill bg-amber-400/10 text-amber-300">Medium</span>
+                            {% else %}
+                                <span class="status-pill bg-slate-800 text-slate-300">Low</span>
+                            {% endif %}
+                            <span class="status-pill bg-slate-800 text-slate-300">{{ gap.status }}</span>
+                        </div>
+                        <h3 class="mt-3 text-lg font-semibold text-white">{{ gap.title }}</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-400">{{ gap.why_it_matters }}</p>
+                        <p class="mt-2 text-sm leading-6 text-slate-300"><span class="text-slate-500">Suggested action:</span> {{ gap.suggested_action }}</p>
+                    </div>
+                    <div class="w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-4 md:w-72">
+                        <div class="text-xs uppercase tracking-wider text-slate-500">Category</div>
+                        <a href="{{ url_for('due_diligence.category', slug=gap.category_slug) }}" class="mt-1 block text-sm font-semibold text-cyan-300 hover:text-cyan-100">{{ gap.category }}</a>
+                        <div class="mt-4 text-xs uppercase tracking-wider text-slate-500">Suggested owner</div>
+                        <div class="mt-1 text-sm text-slate-300">{{ gap.suggested_owner }}</div>
+                    </div>
+                </div>
+
+                {% if gap.linked_documents %}
+                    <div class="mt-5 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                        <h4 class="text-sm font-semibold text-white">Partial linked evidence</h4>
+                        <div class="mt-3 space-y-2">
+                            {% for document in gap.linked_documents %}
+                                <a href="{{ url_for('documents.detail', document_id=document.id) }}" class="block text-sm text-cyan-300 hover:text-cyan-100">{{ document.title }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="glass-panel rounded-3xl p-8 text-center">
+                <h3 class="text-lg font-semibold text-white">No evidence gaps identified</h3>
+                <p class="mt-2 text-sm text-slate-400">Current evidence coverage appears complete against the configured category expectations.</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
