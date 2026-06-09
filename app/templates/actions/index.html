@@ -1,18 +1,114 @@
 {% extends "base.html" %}
-{% block title %}Tasks · SignalDesk{% endblock %}
-{% block page_title %}Task Tracker{% endblock %}
+{% block title %}Action Control Board · SignalDesk{% endblock %}
+{% block page_title %}Action Control Board{% endblock %}
+
+{% macro action_card(action) %}
+  <a href="{{ url_for('actions.detail', action_id=action.id) }}" class="block rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-cyan-400/40 hover:bg-slate-900/80">
+    <div class="font-semibold leading-5 text-white">{{ action.title }}</div>
+    {% if action.description %}
+      <p class="mt-3 line-clamp-3 text-sm leading-6 text-slate-400">{{ action.description }}</p>
+    {% elif action.source_snippet %}
+      <p class="mt-3 line-clamp-3 text-sm leading-6 text-slate-400">{{ action.source_snippet }}</p>
+    {% endif %}
+
+    <div class="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide">
+      <span class="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{{ action.owner or 'No owner' }}</span>
+      <span class="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{{ action.priority or 'No priority' }}</span>
+      <span class="rounded-full bg-slate-800 px-2.5 py-1 text-slate-300">{{ action.business_area or 'No area' }}</span>
+    </div>
+
+    <div class="mt-4 grid grid-cols-2 gap-2 text-xs">
+      <div class="rounded-xl bg-slate-900/80 p-2"><div class="text-slate-500">Due</div><div class="mt-1 font-semibold text-white">{{ action.due_date or 'No date' }}</div></div>
+      <div class="rounded-xl bg-slate-900/80 p-2"><div class="text-slate-500">Status</div><div class="mt-1 font-semibold text-white">{{ action.status or 'open' }}</div></div>
+    </div>
+  </a>
+{% endmacro %}
+
 {% block content %}
-<div class="glass-panel rounded-3xl p-6">
-  <h2 class="text-lg font-semibold">Tasks</h2>
-  <div class="mt-6 space-y-3">
-    {% for action in actions %}
-      <a href="{{ url_for('actions.detail', action_id=action.id) }}" class="block rounded-2xl border border-slate-800 bg-slate-950/60 p-4 hover:bg-slate-900">
-        <div class="font-semibold text-white">{{ action.title }}</div>
-        <div class="mt-2 text-xs text-slate-500">{{ action.owner or 'Unknown' }} · {{ action.priority or 'Unknown' }} · {{ action.status }}</div>
-      </a>
-    {% else %}
-      <p class="text-sm text-slate-500">No records created yet.</p>
-    {% endfor %}
+<div class="space-y-6">
+  <div class="glass-panel rounded-3xl p-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div>
+        <h2 class="text-2xl font-bold text-white">Action Control Board</h2>
+        <p class="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
+          Workflow view of follow-ups extracted from documents and intelligence reviews. Focus on ownership, due dates and blocked items.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {% for owner in owners[:10] %}
+          <span class="rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1">{{ owner }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
+      <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Total</div><div class="mt-2 text-2xl font-bold text-white">{{ stats.total }}</div></div>
+      <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4"><div class="text-xs text-cyan-100/60">Open</div><div class="mt-2 text-2xl font-bold text-cyan-100">{{ stats.open }}</div></div>
+      <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-4"><div class="text-xs text-red-100/60">Overdue</div><div class="mt-2 text-2xl font-bold text-red-100">{{ stats.overdue }}</div></div>
+      <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4"><div class="text-xs text-amber-100/60">Due 7 days</div><div class="mt-2 text-2xl font-bold text-amber-100">{{ stats.due_soon }}</div></div>
+      <div class="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-4"><div class="text-xs text-violet-100/60">No owner</div><div class="mt-2 text-2xl font-bold text-violet-100">{{ stats.no_owner }}</div></div>
+      <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-4"><div class="text-xs text-red-100/60">High priority</div><div class="mt-2 text-2xl font-bold text-red-100">{{ stats.high_priority }}</div></div>
+      <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><div class="text-xs text-emerald-100/60">Complete</div><div class="mt-2 text-2xl font-bold text-emerald-100">{{ stats.complete }}</div></div>
+    </div>
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-4">
+    <aside class="space-y-6 xl:col-span-1">
+      <div class="glass-panel rounded-3xl p-5">
+        <h3 class="font-semibold text-red-100">Overdue</h3>
+        <div class="mt-4 space-y-3">
+          {% for action in overdue[:8] %}
+            <a href="{{ url_for('actions.detail', action_id=action.id) }}" class="block rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-50 hover:bg-red-400/20">
+              <div class="font-semibold">{{ action.title }}</div>
+              <div class="mt-1 text-xs text-red-100/70">{{ action.owner or 'No owner' }} · due {{ action.due_date }}</div>
+            </a>
+          {% else %}
+            <p class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-sm text-slate-500">No overdue actions.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="glass-panel rounded-3xl p-5">
+        <h3 class="font-semibold text-amber-100">Due Soon</h3>
+        <div class="mt-4 space-y-3">
+          {% for action in due_soon[:8] %}
+            <a href="{{ url_for('actions.detail', action_id=action.id) }}" class="block rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-50 hover:bg-amber-400/20">
+              <div class="font-semibold">{{ action.title }}</div>
+              <div class="mt-1 text-xs text-amber-100/70">{{ action.owner or 'No owner' }} · due {{ action.due_date }}</div>
+            </a>
+          {% else %}
+            <p class="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-sm text-slate-500">Nothing due in the next 7 days.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </aside>
+
+    <div class="grid gap-5 xl:col-span-3 xl:grid-cols-5">
+      <section class="glass-panel rounded-3xl p-4">
+        <div class="mb-4 flex items-center justify-between"><h3 class="font-semibold text-white">New</h3><span class="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-200">{{ lanes.new|length }}</span></div>
+        <div class="space-y-3">{% for action in lanes.new %}{{ action_card(action) }}{% else %}<p class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-500">No new actions.</p>{% endfor %}</div>
+      </section>
+
+      <section class="glass-panel rounded-3xl p-4">
+        <div class="mb-4 flex items-center justify-between"><h3 class="font-semibold text-violet-100">Needs Owner</h3><span class="rounded-full bg-violet-400/10 px-2.5 py-1 text-xs font-bold text-violet-100">{{ lanes.needs_owner|length }}</span></div>
+        <div class="space-y-3">{% for action in lanes.needs_owner %}{{ action_card(action) }}{% else %}<p class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-500">No unassigned actions.</p>{% endfor %}</div>
+      </section>
+
+      <section class="glass-panel rounded-3xl p-4">
+        <div class="mb-4 flex items-center justify-between"><h3 class="font-semibold text-cyan-100">In Progress</h3><span class="rounded-full bg-cyan-400/10 px-2.5 py-1 text-xs font-bold text-cyan-100">{{ lanes.in_progress|length }}</span></div>
+        <div class="space-y-3">{% for action in lanes.in_progress %}{{ action_card(action) }}{% else %}<p class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-500">Nothing in progress.</p>{% endfor %}</div>
+      </section>
+
+      <section class="glass-panel rounded-3xl p-4">
+        <div class="mb-4 flex items-center justify-between"><h3 class="font-semibold text-red-100">Blocked</h3><span class="rounded-full bg-red-400/10 px-2.5 py-1 text-xs font-bold text-red-100">{{ lanes.blocked|length }}</span></div>
+        <div class="space-y-3">{% for action in lanes.blocked %}{{ action_card(action) }}{% else %}<p class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-500">No blocked actions.</p>{% endfor %}</div>
+      </section>
+
+      <section class="glass-panel rounded-3xl p-4">
+        <div class="mb-4 flex items-center justify-between"><h3 class="font-semibold text-emerald-100">Complete</h3><span class="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-100">{{ lanes.complete|length }}</span></div>
+        <div class="space-y-3">{% for action in lanes.complete %}{{ action_card(action) }}{% else %}<p class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 text-sm text-slate-500">No completed actions.</p>{% endfor %}</div>
+      </section>
+    </div>
   </div>
 </div>
 {% endblock %}
