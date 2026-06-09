@@ -1,6 +1,5 @@
 import json
 import re
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +68,35 @@ def _json_loads_safe(raw: str) -> dict[str, Any]:
     }
 
 
+def _list_value(value):
+    if isinstance(value, list):
+        return value
+    if value in (None, ""):
+        return []
+    return [value]
+
+
+def _text_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _safe_summary_from_context(source_file: SourceFile) -> str:
+    filename = source_file.original_filename or f"SourceFile {source_file.id}"
+    preview = ""
+    if source_file.document_text and source_file.document_text.text_preview:
+        preview = source_file.document_text.text_preview.strip()
+
+    if preview:
+        preview = preview.replace("\n", " ")[:500]
+        return f"Local AI review completed for {filename}. Extracted text preview: {preview}"
+
+    return f"Local AI review completed for {filename}, but no extracted text preview was available for summarisation."
+
+
 def _ollama_generate(model: str, prompt: str, expect_json: bool = True) -> tuple[str, int, int]:
     base_url = current_app.config.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
     url = f"{base_url}/api/generate"
@@ -100,20 +128,21 @@ def _ollama_generate(model: str, prompt: str, expect_json: bool = True) -> tuple
 
 def _create_run(
     source_file_id: int,
-    run_type: str,
+    task_type: str,
     provider: str,
     model_name: str,
     prompt_version: str,
 ) -> AIProcessingRun:
     run = AIProcessingRun(
         source_file_id=source_file_id,
-        run_type=run_type,
+        task_type=task_type,
         provider=provider,
         model_name=model_name,
-        prompt_version=prompt_version,
         status="running",
+        prompt_hash=prompt_version,
+        input_token_estimate=0,
+        output_token_estimate=0,
         started_at=utcnow(),
-        estimated_cost=0,
     )
     db.session.add(run)
     db.session.flush()
@@ -128,11 +157,10 @@ def _finish_run(
     error_message: str | None = None,
 ):
     run.status = status
-    run.input_token_estimate = input_tokens
-    run.output_token_estimate = output_tokens
+    run.input_token_estimate = input_tokens or 0
+    run.output_token_estimate = output_tokens or 0
     run.error_message = error_message
-    run.finished_at = utcnow()
-    run.estimated_cost = Decimal("0.0000")
+    run.completed_at = utcnow()
     db.session.add(run)
 
 
@@ -220,22 +248,14 @@ DOCUMENT CONTEXT:
 {context}
 """.strip()
 
-    run = _create_run(
-        source_file.id,
-        "local_triage",
-        "ollama",
-        model,
-        TRIAGE_PROMPT_VERSION,
-    )
+    run = _create_run(source_file.id, "local_triage", "ollama", model, TRIAGE_PROMPT_VERSION)
 
     try:
         output, input_tokens, output_tokens = _ollama_generate(model, prompt, expect_json=True)
         parsed = _json_loads_safe(output)
-
         _finish_run(run, "success", input_tokens, output_tokens)
         db.session.commit()
         return parsed
-
     except Exception as exc:
         _finish_run(run, "failed", error_message=str(exc))
         db.session.commit()
@@ -253,31 +273,9 @@ Extract business-useful structured information from the document.
 
 Return ONLY valid JSON using this exact structure:
 {{
-  "actions": [
-    {{
-      "title": "",
-      "description": "",
-      "owner": "",
-      "due_date": "",
-      "priority": "Low|Medium|High|Unknown",
-      "source_snippet": ""
-    }}
-  ],
-  "decisions": [
-    {{
-      "decision": "",
-      "decision_owner": "",
-      "date_or_context": "",
-      "source_snippet": ""
-    }}
-  ],
-  "entities": [
-    {{
-      "name": "",
-      "entity_type": "Person|Company|Service|Department|Location|Project|Buyer|Investor|Supplier|Regulator|Contract|Other",
-      "context": ""
-    }}
-  ],
+  "actions": [],
+  "decisions": [],
+  "entities": [],
   "important_dates": [],
   "financial_values": [],
   "open_questions": [],
@@ -294,22 +292,14 @@ DOCUMENT CONTEXT:
 {context}
 """.strip()
 
-    run = _create_run(
-        source_file.id,
-        "local_structured_extraction",
-        "ollama",
-        model,
-        STRUCTURED_EXTRACTION_PROMPT_VERSION,
-    )
+    run = _create_run(source_file.id, "local_structured_extraction", "ollama", model, STRUCTURED_EXTRACTION_PROMPT_VERSION)
 
     try:
         output, input_tokens, output_tokens = _ollama_generate(model, prompt, expect_json=True)
         parsed = _json_loads_safe(output)
-
         _finish_run(run, "success", input_tokens, output_tokens)
         db.session.commit()
         return parsed
-
     except Exception as exc:
         _finish_run(run, "failed", error_message=str(exc))
         db.session.commit()
@@ -336,25 +326,8 @@ Return ONLY valid JSON using this exact structure:
   "summary": "",
   "detailed_summary": "",
   "key_points": [],
-  "risks": [
-    {{
-      "title": "",
-      "severity": "Green|Amber|Red",
-      "confidence": "Low|Medium|High",
-      "business_area": "",
-      "why_it_matters": "",
-      "buyer_relevance": "",
-      "source_snippet": ""
-    }}
-  ],
-  "opportunities": [
-    {{
-      "title": "",
-      "category": "",
-      "why_it_matters": "",
-      "source_snippet": ""
-    }}
-  ],
+  "risks": [],
+  "opportunities": [],
   "due_diligence": {{
     "is_relevant": false,
     "category": "",
@@ -375,30 +348,22 @@ Return ONLY valid JSON using this exact structure:
 Rules:
 - Be cautious. Say "possible" or "may" unless the document provides strong evidence.
 - Do not invent facts.
-- Every risk must include a short source snippet.
 - If this is routine with no material issue, say so.
+- Always provide a useful non-empty summary when extracted text is present.
 - Focus on what a Head of Recruitment and Executive Team member would need to know.
 
 DOCUMENT CONTEXT:
 {context}
 """.strip()
 
-    run = _create_run(
-        source_file.id,
-        "local_summary_review",
-        "ollama",
-        model,
-        SUMMARY_REVIEW_PROMPT_VERSION,
-    )
+    run = _create_run(source_file.id, "local_summary_review", "ollama", model, SUMMARY_REVIEW_PROMPT_VERSION)
 
     try:
         output, input_tokens, output_tokens = _ollama_generate(model, prompt, expect_json=True)
         parsed = _json_loads_safe(output)
-
         _finish_run(run, "success", input_tokens, output_tokens)
         db.session.commit()
         return parsed
-
     except Exception as exc:
         _finish_run(run, "failed", error_message=str(exc))
         db.session.commit()
@@ -411,7 +376,8 @@ def run_full_local_ai_review(source_file_id: int) -> DocumentAnalysis:
     if not source_file:
         raise ValueError(f"SourceFile not found: {source_file_id}")
 
-    if not source_file.document_text or not source_file.document_text.text_preview:
+    document_text = _get_document_text(source_file)
+    if not document_text.strip():
         raise ValueError("Document must be processed/extracted before running local AI review.")
 
     source_file.processing_status = "local_ai_reviewing"
@@ -425,10 +391,8 @@ def run_full_local_ai_review(source_file_id: int) -> DocumentAnalysis:
 
     if primary_area:
         source_file.business_area = primary_area
-
     if document_category:
         source_file.document_category = document_category
-
     if sensitivity:
         source_file.sensitivity_level = sensitivity
 
@@ -439,35 +403,39 @@ def run_full_local_ai_review(source_file_id: int) -> DocumentAnalysis:
     review = run_summary_review(source_file)
 
     analysis = DocumentAnalysis.query.filter_by(source_file_id=source_file.id).first()
-
     if not analysis:
         analysis = DocumentAnalysis(source_file_id=source_file.id)
         db.session.add(analysis)
 
     analysis.provider = "ollama"
     analysis.model_name = (
-        f"{current_app.config.get('LOCAL_TRIAGE_MODEL')} | "
-        f"{current_app.config.get('LOCAL_EXTRACTION_MODEL')} | "
-        f"{current_app.config.get('LOCAL_SUMMARY_MODEL')}"
+        f"{current_app.config.get('LOCAL_TRIAGE_MODEL', 'qwen2.5-coder:3b')} | "
+        f"{current_app.config.get('LOCAL_EXTRACTION_MODEL', 'qwen2.5-coder:7b')} | "
+        f"{current_app.config.get('LOCAL_SUMMARY_MODEL', 'llama3.1:8b')}"
     )
 
-    analysis.summary = review.get("summary")
-    analysis.detailed_summary = review.get("detailed_summary")
+    summary = _text_value(review.get("summary"))
+    detailed_summary = _text_value(review.get("detailed_summary"))
 
-    analysis.key_points_json = review.get("key_points", [])
-    analysis.decisions_json = structured.get("decisions", [])
-    analysis.actions_json = structured.get("actions", [])
-    analysis.risks_json = review.get("risks", [])
-    analysis.opportunities_json = review.get("opportunities", [])
-    analysis.entities_json = structured.get("entities", [])
+    if not summary:
+        summary = _safe_summary_from_context(source_file)
+    if not detailed_summary:
+        detailed_summary = summary
 
-    due_diligence = review.get("due_diligence", {})
+    analysis.summary = summary
+    analysis.detailed_summary = detailed_summary
+    analysis.key_points_json = _list_value(review.get("key_points"))
+    analysis.decisions_json = _list_value(structured.get("decisions"))
+    analysis.actions_json = _list_value(structured.get("actions"))
+    analysis.risks_json = _list_value(review.get("risks"))
+    analysis.opportunities_json = _list_value(review.get("opportunities"))
+    analysis.entities_json = _list_value(structured.get("entities"))
+
+    due_diligence = review.get("due_diligence") if isinstance(review.get("due_diligence"), dict) else {}
     due_diligence["triage"] = triage
     analysis.due_diligence_json = due_diligence
-
-    analysis.buyer_questions_json = due_diligence.get("likely_buyer_questions", [])
-
-    analysis.evidence_strength = due_diligence.get("evidence_strength")
+    analysis.buyer_questions_json = _list_value(due_diligence.get("likely_buyer_questions"))
+    analysis.evidence_strength = due_diligence.get("evidence_strength") or triage.get("exit_relevance")
     analysis.confidence_score = None
 
     source_file.processing_status = "local_ai_complete"
