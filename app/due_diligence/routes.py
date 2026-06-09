@@ -1,8 +1,15 @@
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import DueDiligenceCategoryNote, DueDiligenceEvidence, SourceFile, utcnow
+from app.services.due_diligence_exports import (
+    build_board_pack_context,
+    buyer_questions_csv,
+    category_narrative_csv,
+    evidence_index_csv,
+    risk_gap_tracker_csv,
+)
 from app.services.due_diligence_service import (
     CATEGORY_BY_SLUG,
     DUE_DILIGENCE_CATEGORIES,
@@ -20,6 +27,14 @@ def _checkbox_enabled(name):
     return request.form.get(name) in {"1", "true", "yes", "on"}
 
 
+def _csv_download(content, filename):
+    return Response(
+        content,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @due_diligence_bp.route("/")
 @login_required
 def index():
@@ -35,6 +50,37 @@ def index():
         questions=questions[:8],
         narrative=narrative,
     )
+
+
+@due_diligence_bp.route("/board-pack")
+@login_required
+def board_pack():
+    context = build_board_pack_context()
+    return render_template("due_diligence/board_pack.html", **context)
+
+
+@due_diligence_bp.route("/exports/evidence-index.csv")
+@login_required
+def export_evidence_index():
+    return _csv_download(evidence_index_csv(), "signaldash-evidence-index.csv")
+
+
+@due_diligence_bp.route("/exports/buyer-questions.csv")
+@login_required
+def export_buyer_questions():
+    return _csv_download(buyer_questions_csv(), "signaldash-buyer-questions.csv")
+
+
+@due_diligence_bp.route("/exports/risk-gap-tracker.csv")
+@login_required
+def export_risk_gap_tracker():
+    return _csv_download(risk_gap_tracker_csv(), "signaldash-risk-gap-tracker.csv")
+
+
+@due_diligence_bp.route("/exports/category-narrative.csv")
+@login_required
+def export_category_narrative():
+    return _csv_download(category_narrative_csv(), "signaldash-category-narrative.csv")
 
 
 @due_diligence_bp.route("/category/<slug>")
