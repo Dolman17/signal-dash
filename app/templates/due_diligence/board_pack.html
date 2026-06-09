@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Board Pack · Due Diligence{% endblock %}
+{% block page_title %}Board Pack & Adviser Export Pack{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="glass-panel rounded-3xl p-6">
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <a href="{{ url_for('due_diligence.index') }}" class="text-sm font-semibold text-cyan-300 hover:text-cyan-100">← Due diligence library</a>
+                <h2 class="mt-3 text-2xl font-bold text-white">Board Pack & Adviser Export Pack</h2>
+                <p class="mt-3 max-w-4xl text-sm leading-6 text-slate-400">
+                    A curated, source-linked diligence pack for board review, adviser preparation and buyer-response planning.
+                    Use the CSV exports for working files and the pack below as the board/adviser view.
+                </p>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2 lg:w-[34rem]">
+                <a href="{{ url_for('due_diligence.export_evidence_index') }}" class="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-400/20">Download Evidence Index CSV</a>
+                <a href="{{ url_for('due_diligence.export_buyer_questions') }}" class="rounded-xl border border-violet-400/20 bg-violet-400/10 px-4 py-3 text-sm font-semibold text-violet-100 hover:bg-violet-400/20">Download Buyer Q&A CSV</a>
+                <a href="{{ url_for('due_diligence.export_risk_gap_tracker') }}" class="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100 hover:bg-amber-400/20">Download Risk & Gap CSV</a>
+                <a href="{{ url_for('due_diligence.export_category_narrative') }}" class="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-400/20">Download Narrative CSV</a>
+            </div>
+        </div>
+
+        <div class="mt-6 grid gap-4 md:grid-cols-4 xl:grid-cols-8">
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Readiness</div><div class="mt-2 text-2xl font-bold text-white">{{ library.totals.overall_score }}%</div></div>
+            <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><div class="text-xs text-emerald-100/60">Strong</div><div class="mt-2 text-2xl font-bold text-emerald-100">{{ library.totals.strong }}</div></div>
+            <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4"><div class="text-xs text-cyan-100/60">Adequate</div><div class="mt-2 text-2xl font-bold text-cyan-100">{{ library.totals.adequate }}</div></div>
+            <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4"><div class="text-xs text-amber-100/60">Weak</div><div class="mt-2 text-2xl font-bold text-amber-100">{{ library.totals.weak }}</div></div>
+            <div class="rounded-2xl border border-red-400/20 bg-red-400/10 p-4"><div class="text-xs text-red-100/60">High Risk</div><div class="mt-2 text-2xl font-bold text-red-100">{{ library.totals.high_risk }}</div></div>
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"><div class="text-xs text-slate-500">Insufficient</div><div class="mt-2 text-2xl font-bold text-white">{{ library.totals.insufficient }}</div></div>
+            <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4"><div class="text-xs text-cyan-100/60">Curated</div><div class="mt-2 text-2xl font-bold text-cyan-100">{{ library.totals.curated_evidence }}</div></div>
+            <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4"><div class="text-xs text-emerald-100/60">Pinned</div><div class="mt-2 text-2xl font-bold text-emerald-100">{{ library.totals.pinned_evidence }}</div></div>
+        </div>
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-3">
+        <div class="space-y-6 xl:col-span-2">
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold text-white">Executive Narrative</h3>
+                <p class="mt-3 text-sm leading-6 text-slate-300">{{ narrative.headline }}</p>
+
+                <div class="mt-6 grid gap-5 lg:grid-cols-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-emerald-100">What is supportable</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for item in narrative.what_has_improved %}
+                                <div class="rounded-xl border border-emerald-400/10 bg-emerald-400/5 p-3 text-sm leading-6 text-emerald-50/90">{{ item }}</div>
+                            {% else %}<p class="text-sm text-slate-500">No supportable areas yet.</p>{% endfor %}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-semibold text-red-100">Risk control</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for item in narrative.risk_control %}
+                                <div class="rounded-xl border border-red-400/10 bg-red-400/5 p-3 text-sm leading-6 text-red-50/90">{{ item }}</div>
+                            {% else %}<p class="text-sm text-slate-500">No major risk-control points.</p>{% endfor %}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-semibold text-cyan-100">Buyer story</h4>
+                        <div class="mt-3 space-y-3">
+                            {% for item in narrative.buyer_story %}
+                                <div class="rounded-xl border border-cyan-400/10 bg-cyan-400/5 p-3 text-sm leading-6 text-cyan-50/90">{{ item }}</div>
+                            {% else %}<p class="text-sm text-slate-500">No buyer story yet.</p>{% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-lg font-semibold text-white">Category Narrative Pack</h3>
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                        <thead>
+                            <tr class="text-left text-xs uppercase tracking-wider text-slate-500">
+                                <th class="py-3 pr-4">Category</th>
+                                <th class="py-3 pr-4">Score</th>
+                                <th class="py-3 pr-4">Status</th>
+                                <th class="py-3 pr-4">Evidence</th>
+                                <th class="py-3 pr-4">Board view</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-900">
+                            {% for category in library.categories %}
+                                <tr>
+                                    <td class="py-4 pr-4 align-top">
+                                        <a href="{{ url_for('due_diligence.category', slug=category.slug) }}" class="font-semibold text-white hover:text-cyan-200">{{ category.name }}</a>
+                                    </td>
+                                    <td class="py-4 pr-4 align-top text-white">{{ category.score }}%</td>
+                                    <td class="py-4 pr-4 align-top text-slate-300">{{ category.status }}</td>
+                                    <td class="py-4 pr-4 align-top text-slate-400">
+                                        {{ category.counts.documents }} docs · {{ category.counts.curated_evidence }} curated · {{ category.counts.pinned_evidence }} pinned
+                                    </td>
+                                    <td class="py-4 pr-4 align-top text-slate-400">
+                                        {% if category.note and category.note.current_position %}
+                                            {{ category.note.current_position }}
+                                        {% else %}
+                                            {{ category.reason }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-semibold text-white">Priority Evidence Gaps</h3>
+                <div class="mt-4 space-y-3">
+                    {% for gap in gaps[:12] %}
+                        <a href="{{ url_for('due_diligence.category', slug=gap.category_slug) }}" class="block rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 hover:bg-amber-400/20">
+                            <div class="text-sm font-semibold text-white">{{ gap.title }}</div>
+                            <div class="mt-1 text-xs text-amber-100/70">{{ gap.category }} · {{ gap.priority }}</div>
+                            <p class="mt-2 text-xs leading-5 text-amber-50/80">{{ gap.suggested_action }}</p>
+                        </a>
+                    {% else %}
+                        <p class="text-sm text-emerald-300">No priority evidence gaps identified.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-semibold text-white">Likely Buyer Questions</h3>
+                <div class="mt-4 space-y-3">
+                    {% for question in questions[:12] %}
+                        <div class="rounded-xl border border-violet-400/20 bg-violet-400/10 p-3">
+                            <div class="text-sm font-semibold text-white">{{ question.question }}</div>
+                            <div class="mt-1 text-xs text-violet-100/70">{{ question.category }}</div>
+                            <p class="mt-2 text-xs leading-5 text-violet-50/80">{{ question.recommended_angle }}</p>
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No buyer questions generated yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-3xl p-6">
+                <h3 class="text-sm font-semibold text-white">Next Focus</h3>
+                <div class="mt-4 space-y-3">
+                    {% for item in narrative.next_focus %}
+                        <div class="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-sm leading-6 text-cyan-50/90">{{ item }}</div>
+                    {% else %}
+                        <p class="text-sm text-slate-500">No focus items generated yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
