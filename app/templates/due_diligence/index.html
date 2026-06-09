@@ -15,13 +15,14 @@
             </div>
 
             <div class="flex flex-wrap gap-3">
+                <a href="{{ url_for('due_diligence.board_pack') }}" class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-emerald-400">Board Pack</a>
                 <a href="{{ url_for('due_diligence.scorecard') }}" class="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400">Scorecard</a>
                 <a href="{{ url_for('due_diligence.evidence_gaps') }}" class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-amber-400">Evidence Gaps</a>
                 <a href="{{ url_for('due_diligence.buyer_questions') }}" class="rounded-xl bg-violet-500 px-4 py-2 text-sm font-bold text-white hover:bg-violet-400">Buyer Questions</a>
             </div>
         </div>
 
-        <div class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <div class="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-8">
             <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
                 <div class="text-xs uppercase tracking-wider text-cyan-100/60">Overall Score</div>
                 <div class="mt-2 text-2xl font-bold text-cyan-100">{{ library.totals.overall_score }}%</div>
@@ -46,8 +47,28 @@
                 <div class="text-xs uppercase tracking-wider text-slate-500">Insufficient</div>
                 <div class="mt-2 text-2xl font-bold text-white">{{ library.totals.insufficient }}</div>
             </div>
+            <div class="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4">
+                <div class="text-xs uppercase tracking-wider text-cyan-100/60">Curated</div>
+                <div class="mt-2 text-2xl font-bold text-cyan-100">{{ library.totals.curated_evidence }}</div>
+            </div>
+            <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                <div class="text-xs uppercase tracking-wider text-emerald-100/60">Pinned</div>
+                <div class="mt-2 text-2xl font-bold text-emerald-100">{{ library.totals.pinned_evidence }}</div>
+            </div>
         </div>
     </div>
+
+    <a href="{{ url_for('due_diligence.board_pack') }}" class="glass-panel block rounded-3xl p-6 hover:border-emerald-400/40">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+                <h3 class="text-lg font-semibold text-white">Board Pack & Adviser Exports</h3>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    Generate the board/adviser view, evidence index, buyer Q&A, risk and gap tracker, and category narrative working files.
+                </p>
+            </div>
+            <span class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950">Open Pack →</span>
+        </div>
+    </a>
 
     <div class="grid gap-6 xl:grid-cols-3">
         <div class="space-y-6 xl:col-span-2">
@@ -65,9 +86,9 @@
 
                         <div class="mt-5 grid grid-cols-5 gap-2 text-center text-xs">
                             <div class="rounded-xl bg-slate-950/70 p-2"><div class="text-slate-500">Docs</div><div class="mt-1 font-semibold text-white">{{ category.counts.documents }}</div></div>
-                            <div class="rounded-xl bg-slate-950/70 p-2"><div class="text-slate-500">AI</div><div class="mt-1 font-semibold text-white">{{ category.counts.analyses }}</div></div>
+                            <div class="rounded-xl bg-slate-950/70 p-2"><div class="text-slate-500">Curated</div><div class="mt-1 font-semibold text-white">{{ category.counts.curated_evidence }}</div></div>
+                            <div class="rounded-xl bg-slate-950/70 p-2"><div class="text-slate-500">Pinned</div><div class="mt-1 font-semibold text-white">{{ category.counts.pinned_evidence }}</div></div>
                             <div class="rounded-xl bg-slate-950/70 p-2"><div class="text-slate-500">Risks</div><div class="mt-1 font-semibold text-white">{{ category.counts.risks }}</div></div>
-                            <div class="rounded-xl bg-slate-950/70 p-2"><div class="text-slate-500">Actions</div><div class="mt-1 font-semibold text-white">{{ category.counts.actions }}</div></div>
                             <div class="rounded-xl bg-slate-950/70 p-2"><div class="text-slate-500">Score</div><div class="mt-1 font-semibold text-white">{{ category.score }}%</div></div>
                         </div>
 
