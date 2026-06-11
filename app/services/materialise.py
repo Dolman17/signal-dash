@@ -50,6 +50,59 @@ def _truncate(value, limit):
     return value[: limit - 3].rstrip() + "..."
 
 
+def _normalise_json_list(value, default_key="title"):
+    if not value:
+        return []
+
+    if isinstance(value, dict):
+        return [value]
+
+    if not isinstance(value, list):
+        value = [value]
+
+    normalised = []
+    for item in value:
+        if isinstance(item, dict):
+            normalised.append(item)
+        elif item is None:
+            continue
+        else:
+            text = _clean(item)
+            if text:
+                normalised.append({default_key: text, "description": text, "summary": text})
+
+    return normalised
+
+
+def _normalise_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _normalise_analysis_json(analysis):
+    analysis.actions_json = _normalise_json_list(analysis.actions_json, default_key="title")
+    analysis.risks_json = _normalise_json_list(analysis.risks_json, default_key="title")
+    analysis.opportunities_json = _normalise_json_list(analysis.opportunities_json, default_key="title")
+    analysis.entities_json = _normalise_json_list(analysis.entities_json, default_key="name")
+    analysis.buyer_questions_json = _normalise_json_list(analysis.buyer_questions_json, default_key="question")
+    analysis.due_diligence_json = _normalise_dict(analysis.due_diligence_json)
+
+    if analysis.due_diligence_json:
+        analysis.due_diligence_json["evidence_gaps"] = _normalise_json_list(
+            analysis.due_diligence_json.get("evidence_gaps"),
+            default_key="gap",
+        )
+        analysis.due_diligence_json["likely_buyer_questions"] = _normalise_json_list(
+            analysis.due_diligence_json.get("likely_buyer_questions"),
+            default_key="question",
+        )
+        analysis.due_diligence_json["recommended_follow_up"] = _normalise_json_list(
+            analysis.due_diligence_json.get("recommended_follow_up"),
+            default_key="title",
+        )
+
+    return analysis
+
+
 def _normalise_severity(value):
     value = _clean(value, "Amber").title()
 
@@ -145,10 +198,11 @@ def create_actions_from_analysis(source_file, analysis):
     created = 0
     skipped = 0
 
-    actions = analysis.actions_json or []
+    actions = _normalise_json_list(analysis.actions_json, default_key="title")
+    first_chunk = _first_chunk(source_file.id)
 
     for item in actions:
-        title = _truncate(item.get("title") or item.get("action") or "Untitled action", 300)
+        title = _truncate(item.get("title") or item.get("action") or item.get("description") or "Untitled action", 300)
 
         if not title or title == "Untitled action":
             skipped += 1
@@ -160,13 +214,13 @@ def create_actions_from_analysis(source_file, analysis):
 
         action = ActionItem(
             title=title,
-            description=_clean(item.get("description")),
+            description=_clean(item.get("description") or item.get("summary")),
             owner=_truncate(item.get("owner"), 255) or None,
             priority=_normalise_priority(item.get("priority")),
             status="open",
             business_area=source_file.business_area,
             source_file_id=source_file.id,
-            document_chunk_id=_first_chunk(source_file.id).id if _first_chunk(source_file.id) else None,
+            document_chunk_id=first_chunk.id if first_chunk else None,
             source_snippet=_truncate(item.get("source_snippet"), 2000),
             created_by_ai=True,
             confidence="Medium",
@@ -184,10 +238,10 @@ def create_risks_and_insights_from_analysis(source_file, analysis):
     created_insights = 0
     skipped_insights = 0
 
-    risks = analysis.risks_json or []
+    risks = _normalise_json_list(analysis.risks_json, default_key="title")
 
     for item in risks:
-        title = _truncate(item.get("title") or "Untitled risk", 300)
+        title = _truncate(item.get("title") or item.get("summary") or item.get("description") or "Untitled risk", 300)
 
         if not title or title == "Untitled risk":
             skipped_risks += 1
@@ -197,6 +251,7 @@ def create_risks_and_insights_from_analysis(source_file, analysis):
         severity = _normalise_severity(item.get("severity"))
         confidence = _normalise_confidence(item.get("confidence"))
         business_area = _clean(item.get("business_area")) or source_file.business_area
+        summary = _clean(item.get("why_it_matters")) or _clean(item.get("summary")) or _clean(item.get("description"))
 
         existing_risk = _risk_exists(source_file.id, title)
 
@@ -213,7 +268,7 @@ def create_risks_and_insights_from_analysis(source_file, analysis):
                 impact=severity,
                 valuation_impact="Unknown",
                 buyer_relevance=_clean(item.get("buyer_relevance")),
-                summary=_clean(item.get("why_it_matters")) or _clean(item.get("summary")),
+                summary=summary,
                 mitigation=None,
                 owner=None,
                 status="open",
@@ -235,8 +290,8 @@ def create_risks_and_insights_from_analysis(source_file, analysis):
                 category="AI Extracted Risk",
                 severity=severity,
                 confidence=confidence,
-                summary=_clean(item.get("why_it_matters")) or _clean(item.get("summary")),
-                why_it_matters=_clean(item.get("why_it_matters")),
+                summary=summary,
+                why_it_matters=_clean(item.get("why_it_matters")) or summary,
                 buyer_relevance=_clean(item.get("buyer_relevance")),
                 suggested_action=None,
                 status="open",
@@ -252,7 +307,7 @@ def create_risks_and_insights_from_analysis(source_file, analysis):
             _create_evidence(
                 insight,
                 source_file,
-                snippet=item.get("source_snippet") or item.get("why_it_matters"),
+                snippet=item.get("source_snippet") or item.get("why_it_matters") or summary,
             )
 
             created_insights += 1
@@ -264,10 +319,10 @@ def create_opportunity_insights_from_analysis(source_file, analysis):
     created = 0
     skipped = 0
 
-    opportunities = analysis.opportunities_json or []
+    opportunities = _normalise_json_list(analysis.opportunities_json, default_key="title")
 
     for item in opportunities:
-        title = _truncate(item.get("title") or "Untitled opportunity", 300)
+        title = _truncate(item.get("title") or item.get("summary") or item.get("description") or "Untitled opportunity", 300)
 
         if not title or title == "Untitled opportunity":
             skipped += 1
@@ -277,6 +332,8 @@ def create_opportunity_insights_from_analysis(source_file, analysis):
             skipped += 1
             continue
 
+        summary = _clean(item.get("why_it_matters")) or _clean(item.get("summary")) or _clean(item.get("description"))
+
         insight = Insight(
             title=title,
             insight_type="Opportunity",
@@ -284,10 +341,10 @@ def create_opportunity_insights_from_analysis(source_file, analysis):
             category=_clean(item.get("category")) or "AI Extracted Opportunity",
             severity="Blue",
             confidence="Medium",
-            summary=_clean(item.get("why_it_matters")),
-            why_it_matters=_clean(item.get("why_it_matters")),
-            buyer_relevance=None,
-            suggested_action=None,
+            summary=summary,
+            why_it_matters=_clean(item.get("why_it_matters")) or summary,
+            buyer_relevance=_clean(item.get("buyer_relevance")),
+            suggested_action=_clean(item.get("suggested_action")),
             status="open",
             owner=None,
             first_seen_at=utcnow(),
@@ -301,7 +358,7 @@ def create_opportunity_insights_from_analysis(source_file, analysis):
         _create_evidence(
             insight,
             source_file,
-            snippet=item.get("source_snippet") or item.get("why_it_matters"),
+            snippet=item.get("source_snippet") or item.get("why_it_matters") or summary,
         )
 
         created += 1
@@ -309,11 +366,27 @@ def create_opportunity_insights_from_analysis(source_file, analysis):
     return created, skipped
 
 
+def _join_list_items(items):
+    values = []
+    for item in _normalise_json_list(items, default_key="text"):
+        values.append(
+            _clean(
+                item.get("title")
+                or item.get("question")
+                or item.get("gap")
+                or item.get("text")
+                or item.get("description")
+                or item.get("summary")
+            )
+        )
+    return "; ".join([value for value in values if value])
+
+
 def create_due_diligence_insights_from_analysis(source_file, analysis):
     created = 0
     skipped = 0
 
-    dd = analysis.due_diligence_json or {}
+    dd = _normalise_dict(analysis.due_diligence_json)
 
     if not dd:
         return created, skipped
@@ -344,11 +417,14 @@ def create_due_diligence_insights_from_analysis(source_file, analysis):
     summary_parts.append(f"Buyer interest level: {buyer_interest or 'Unknown'}.")
     summary_parts.append(f"Evidence strength: {evidence_strength}.")
 
-    if evidence_gaps:
-        summary_parts.append("Evidence gaps: " + "; ".join([_clean(x) for x in evidence_gaps]))
+    evidence_gap_text = _join_list_items(evidence_gaps)
+    likely_question_text = _join_list_items(likely_questions)
 
-    if likely_questions:
-        summary_parts.append("Likely buyer questions: " + "; ".join([_clean(x) for x in likely_questions]))
+    if evidence_gap_text:
+        summary_parts.append("Evidence gaps: " + evidence_gap_text)
+
+    if likely_question_text:
+        summary_parts.append("Likely buyer questions: " + likely_question_text)
 
     severity = "Amber"
 
@@ -359,7 +435,7 @@ def create_due_diligence_insights_from_analysis(source_file, analysis):
 
     insight = Insight(
         title=title,
-        insight_type="Evidence Gap" if evidence_gaps else "Due Diligence",
+        insight_type="Evidence Gap" if evidence_gap_text else "Due Diligence",
         business_area="PE Exit / Due Diligence",
         category=category,
         severity=severity,
@@ -398,6 +474,8 @@ def materialise_analysis_for_document(source_file_id):
 
     if not analysis:
         raise ValueError("No AI analysis exists for this document.")
+
+    analysis = _normalise_analysis_json(analysis)
 
     created_actions, skipped_actions = create_actions_from_analysis(source_file, analysis)
 
@@ -468,8 +546,15 @@ def materialise_all_reviewed_documents():
             totals["skipped_risks"] += result["skipped_risks"]
             totals["created_insights"] += result["created_insights"]
             totals["skipped_insights"] += result["skipped_insights"]
-        except Exception:
+        except Exception as exc:
             db.session.rollback()
             totals["failed"] += 1
+            message = f"Materialise failed for SourceFile {analysis.source_file_id}: {exc}"
+            print(message, flush=True)
+            try:
+                _log(analysis.source_file_id, "materialise_ai", "failed", message)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
 
     return totals
