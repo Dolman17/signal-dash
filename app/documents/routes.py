@@ -60,6 +60,62 @@ def _log(source_file_id, stage, status, message=None):
     db.session.add(entry)
 
 
+def _normalise_json_list(value, default_key="title"):
+    if not value:
+        return []
+
+    if isinstance(value, dict):
+        return [value]
+
+    if not isinstance(value, list):
+        value = [value]
+
+    normalised = []
+    for item in value:
+        if isinstance(item, dict):
+            normalised.append(item)
+        elif item is None:
+            continue
+        else:
+            text = str(item).strip()
+            if text:
+                normalised.append({default_key: text, "description": text})
+
+    return normalised
+
+
+def _normalise_analysis_for_template(analysis):
+    if not analysis:
+        return None
+
+    analysis.key_points_json = _normalise_json_list(analysis.key_points_json, default_key="text")
+    analysis.decisions_json = _normalise_json_list(analysis.decisions_json, default_key="decision")
+    analysis.actions_json = _normalise_json_list(analysis.actions_json, default_key="title")
+    analysis.risks_json = _normalise_json_list(analysis.risks_json, default_key="title")
+    analysis.opportunities_json = _normalise_json_list(analysis.opportunities_json, default_key="title")
+    analysis.entities_json = _normalise_json_list(analysis.entities_json, default_key="name")
+    analysis.buyer_questions_json = _normalise_json_list(analysis.buyer_questions_json, default_key="question")
+
+    if not isinstance(analysis.due_diligence_json, dict):
+        analysis.due_diligence_json = {}
+
+    if analysis.due_diligence_json:
+        analysis.due_diligence_json["evidence_gaps"] = _normalise_json_list(
+            analysis.due_diligence_json.get("evidence_gaps"),
+            default_key="gap",
+        )
+        analysis.due_diligence_json["likely_buyer_questions"] = _normalise_json_list(
+            analysis.due_diligence_json.get("likely_buyer_questions"),
+            default_key="question",
+        )
+        analysis.due_diligence_json["recommended_follow_up"] = _normalise_json_list(
+            analysis.due_diligence_json.get("recommended_follow_up"),
+            default_key="title",
+        )
+
+    return analysis
+
+
 def _is_deletable_attachment_noise(document):
     file_ext = (document.file_ext or "").lower()
 
@@ -445,6 +501,7 @@ def materialise_all():
 def detail(document_id):
     document = SourceFile.query.get_or_404(document_id)
     analysis = DocumentAnalysis.query.filter_by(source_file_id=document.id).first()
+    analysis = _normalise_analysis_for_template(analysis)
     can_delete_attachment_noise = _is_deletable_attachment_noise(document)
     due_diligence_categories = _due_diligence_categories_for_document(document.id)
 
